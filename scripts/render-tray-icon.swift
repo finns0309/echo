@@ -15,10 +15,16 @@
 // project name (echo = the sound coming back).
 //
 // Pixel layout, 22pt canvas (@2x = 44px):
-//   anchor  = (7.5, 11)        slightly left of center
-//   dot     = filled circle, r=1.4pt
-//   arc1    = stroked, r=4.5pt, ±55°  (1.6pt round caps)
-//   arc2    = stroked, r=8pt,   ±55°  (1.6pt round caps)
+//   anchor  = (8.5, 11)        slightly left of center
+//   dot     = filled circle, r=1.0pt
+//   arc1    = stroked, r=3pt,   ±60°  (1.3pt round caps)
+//   arc2    = stroked, r=5.5pt, ±60°  (1.3pt round caps)
+//
+// Sizing note: the canvas is 22pt but the glyph itself sits inside an inner
+// ~12pt box, leaving ~5pt padding top and bottom. This matches what system
+// menu bar items (Wi-Fi / Bluetooth / volume) actually draw — the HIG says
+// "22pt template image" but is silent on how much of those 22pt the glyph
+// should occupy. Filling the canvas makes us look ~30% larger than peers.
 import AppKit
 
 guard CommandLine.arguments.count >= 2 else {
@@ -51,23 +57,23 @@ ctx.setAllowsAntialiasing(true)
 // Template image: black-on-clear; macOS recolors per dark/light.
 NSColor.black.set()
 
-let cx: CGFloat = 7.5
+let cx: CGFloat = 8.5
 let cy: CGFloat = 11
-let stroke: CGFloat = 1.6
+let stroke: CGFloat = 1.3
 
 // Source dot.
-NSBezierPath(ovalIn: NSRect(x: cx - 1.4, y: cy - 1.4, width: 2.8, height: 2.8)).fill()
+NSBezierPath(ovalIn: NSRect(x: cx - 1.0, y: cy - 1.0, width: 2.0, height: 2.0)).fill()
 
 // Inner arc.
 let inner = NSBezierPath()
-inner.appendArc(withCenter: NSPoint(x: cx, y: cy), radius: 4.5, startAngle: -55, endAngle: 55)
+inner.appendArc(withCenter: NSPoint(x: cx, y: cy), radius: 3, startAngle: -60, endAngle: 60)
 inner.lineWidth = stroke
 inner.lineCapStyle = .round
 inner.stroke()
 
 // Outer arc.
 let outer = NSBezierPath()
-outer.appendArc(withCenter: NSPoint(x: cx, y: cy), radius: 8, startAngle: -55, endAngle: 55)
+outer.appendArc(withCenter: NSPoint(x: cx, y: cy), radius: 5.5, startAngle: -60, endAngle: 60)
 outer.lineWidth = stroke
 outer.lineCapStyle = .round
 outer.stroke()
