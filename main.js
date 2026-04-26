@@ -344,12 +344,14 @@ function rebuildTrayMenu() {
 }
 
 function createTray() {
-  // SF Symbol "music.note" rendered to a template PNG via
-  // scripts/render-tray-icon.swift. Template image = black-on-transparent;
-  // macOS auto-inverts for dark-mode menu bar. The "-Template" filename
-  // suffix is also a recognized hint, but we set the flag explicitly to
-  // avoid depending on the heuristic.
-  const icon = nativeImage.createFromPath(path.join(__dirname, 'assets', 'tray-Template.png'));
+  // Hand-drawn echo mark (dot + two concentric arcs = "broadcasting" / 回响).
+  // scripts/render-tray-icon.swift writes BOTH trayTemplate.png (16×16, @1x)
+  // and trayTemplate@2x.png (32×32, @2x). Pass only the @1x base name —
+  // Electron's nativeImage picks @2x automatically on retina based on the
+  // filename suffix (PNG metadata is ignored). The "Template" suffix in the
+  // base name is what tells macOS to auto-invert in dark mode; the explicit
+  // setTemplateImage(true) is belt-and-suspenders.
+  const icon = nativeImage.createFromPath(path.join(__dirname, 'assets', 'trayTemplate.png'));
   icon.setTemplateImage(true);
   tray = new Tray(icon);
   rebuildTrayMenu();
