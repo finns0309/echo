@@ -1,0 +1,78 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <div id="bg"></div>
+    <canvas id="fx"></canvas>
+    <div id="tint"></div>
+    <div id="cover-panel"><img id="cover" alt=""></div>
+
+    <div id="topbar">
+      <div id="meta">
+        <span id="title">—</span>
+        <span id="artist"></span>
+      </div>
+      <div id="buttons">
+        <button id="back" title="歌词 −0.2s">−</button>
+        <button id="fwd" title="歌词 +0.2s">+</button>
+        <span class="divider"></span>
+        <button id="pin" title="鼠标穿透">◌</button>
+        <button id="close" title="退出">×</button>
+      </div>
+    </div>
+
+    <div id="lyrics">
+      <div class="line prev" id="prev"></div>
+      <div class="line curr" id="curr">等待播放…</div>
+      <div class="line next" id="next"></div>
+    </div>
+
+    <div id="stage"></div>
+
+    <!-- Piano-key strip. Only visible under theme-piano; JS lazily fills it
+         with white + black key divs on first activation. -->
+    <div id="piano-keys"></div>
+
+    <!-- Danmaku layer. Empty by default; spawnDanmaku() appends one .dm-line
+         per lyric change while data-layout="danmaku". Cards fly themselves
+         out and self-remove on animationend. -->
+    <div id="danmaku"></div>
+
+    <!-- Conversation layer. iMessage / duet / etc. JS lazily fills the
+         header + stream + typing-dots scaffold on first activation. -->
+    <div id="convo"></div>
+
+    <!-- Sakura / leaves layer. JS lazily fills with N petal divs on first
+         activation; pure CSS keyframes drive the fall + sway. -->
+    <div id="sakura"></div>
+
+    <!-- Storm layer. Heavy rain hatching is via tint-image (in tokens), but
+         the lightning flash needs a JS-toggled element so onsets can fire it. -->
+    <div id="lightning"></div>
+
+    <!-- Solo / instrumental layer. A canvas takes the full window for the
+         spectrum + particle visuals; meta is layered on top via DOM. -->
+    <div id="solo">
+      <canvas id="solo-fx"></canvas>
+      <div class="solo-meta">
+        <div class="solo-title">—</div>
+        <div class="solo-artist"></div>
+      </div>
+    </div>
+
+    <div id="toast"></div>
+
+    <!-- Fallback indicator. Outside #topbar on purpose — topbar is hover-gated,
+         but this warning needs to be visible at all times when active. -->
+    <div id="source-badge" title="未连接 muse · 回退到 nowplaying-cli，elapsed 不可靠且歌词可能匹配到错误版本">后备模式</div>
+
+    <script src="themes.js"></script>
+    <script src="fx.js"></script>
+    <script src="lrc.js"></script>
+    <script src="netease.js"></script>
+    <script src="app.js"></script>
+  </body>
+</html>

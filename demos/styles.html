@@ -1,0 +1,378 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<title>Lyrics Style Demos</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    background: #0a0a0d;
+    color: #eee;
+    font-family: -apple-system, "PingFang SC", "Hiragino Kaku Gothic ProN", "Hiragino Sans", sans-serif;
+    min-height: 100vh;
+    padding: 40px 24px 80px;
+  }
+  h1 { font-size: 22px; font-weight: 600; margin-bottom: 8px; }
+  .sub { opacity: 0.55; font-size: 13px; margin-bottom: 32px; }
+
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(520px, 1fr));
+    gap: 28px;
+  }
+
+  .card {
+    background: #15151a;
+    border-radius: 12px;
+    padding: 18px;
+    border: 1px solid rgba(255,255,255,0.06);
+  }
+  .card h2 {
+    font-size: 14px;
+    font-weight: 600;
+    margin-bottom: 4px;
+    letter-spacing: 0.3px;
+  }
+  .card .note {
+    opacity: 0.5;
+    font-size: 12px;
+    margin-bottom: 14px;
+    line-height: 1.5;
+  }
+  .stage {
+    width: 100%;
+    height: 220px;
+    border-radius: 14px;
+    overflow: hidden;
+    position: relative;
+    background: #000;
+  }
+
+  /* ============== shared fake cover art backdrop ============== */
+  .bg-album {
+    position: absolute; inset: 0;
+    /* a soft orange gradient stand-in for album art */
+    background:
+      radial-gradient(120% 80% at 30% 30%, #b97a3a 0%, transparent 60%),
+      radial-gradient(120% 80% at 80% 70%, #4a2a5a 0%, transparent 55%),
+      linear-gradient(180deg, #2a1a14 0%, #0d0810 100%);
+    filter: blur(26px) saturate(1.3);
+    transform: scale(1.2);
+  }
+  .bg-tint {
+    position: absolute; inset: 0;
+    background:
+      radial-gradient(ellipse at center, rgba(0,0,0,0.22) 0%, rgba(0,0,0,0.55) 100%);
+  }
+
+  /* ========================================================== */
+  /*  STYLE 1 — 网易云沉浸风（refined 当前版本）                  */
+  /* ========================================================== */
+  .s1 .meta {
+    position: absolute; top: 12px; left: 16px;
+    font-size: 11px; opacity: 0.65;
+    text-shadow: 0 1px 4px rgba(0,0,0,0.8);
+  }
+  .s1 .meta b { font-weight: 600; margin-right: 6px; }
+  .s1 .lyrics {
+    position: absolute; inset: 0;
+    display: flex; flex-direction: column;
+    justify-content: center; align-items: center;
+    text-align: center; padding: 0 22px; gap: 10px;
+  }
+  .s1 .line { width: 100%; text-shadow: 0 2px 10px rgba(0,0,0,0.7); line-height: 1.3; }
+  .s1 .prev, .s1 .next { font-size: 13px; opacity: 0.42; }
+  .s1 .curr { font-size: 26px; font-weight: 700; letter-spacing: 0.5px; }
+
+  /* ========================================================== */
+  /*  STYLE 2 — Apple Music 沉浸风（大字 + 淡入滑动）              */
+  /* ========================================================== */
+  .s2 .bg-album {
+    filter: blur(40px) saturate(1.6);
+    transform: scale(1.4);
+  }
+  .s2 .bg-tint {
+    background: linear-gradient(180deg, rgba(0,0,0,0.15) 0%, rgba(0,0,0,0.5) 100%);
+  }
+  .s2 .meta {
+    position: absolute; bottom: 14px; left: 18px; right: 18px;
+    font-size: 11px; opacity: 0.75;
+    display: flex; justify-content: space-between;
+  }
+  .s2 .lyrics {
+    position: absolute; inset: 0;
+    display: flex; flex-direction: column;
+    justify-content: center; padding: 0 28px 30px;
+    gap: 6px;
+  }
+  .s2 .line {
+    font-size: 15px; font-weight: 500;
+    opacity: 0.35;
+    transition: all 500ms cubic-bezier(0.25, 0.8, 0.25, 1);
+    transform: translateY(0);
+    letter-spacing: 0.2px;
+  }
+  .s2 .curr {
+    font-size: 28px; font-weight: 800;
+    opacity: 1;
+    letter-spacing: 0.3px;
+    line-height: 1.2;
+    transform: translateY(-2px);
+  }
+
+  /* ========================================================== */
+  /*  STYLE 3 — 卡拉OK 逐字高亮                                   */
+  /* ========================================================== */
+  .s3 .bg-album { filter: blur(32px) saturate(1.1); opacity: 0.55; }
+  .s3 .lyrics {
+    position: absolute; inset: 0;
+    display: flex; flex-direction: column;
+    justify-content: center; align-items: center;
+    padding: 0 24px; gap: 10px; text-align: center;
+  }
+  .s3 .prev, .s3 .next { font-size: 13px; opacity: 0.35; }
+  .s3 .curr {
+    font-size: 28px; font-weight: 800;
+    line-height: 1.25;
+    background: linear-gradient(90deg, #fff 0%, #fff var(--karaoke, 0%), rgba(255,255,255,0.3) var(--karaoke, 0%), rgba(255,255,255,0.3) 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    text-shadow: none;
+    transition: none;
+  }
+  .s3 .meta {
+    position: absolute; top: 12px; left: 16px;
+    font-size: 11px; opacity: 0.6;
+  }
+
+  /* ========================================================== */
+  /*  STYLE 4 — 极简横条（屏幕顶/底悬浮 dock 风）                 */
+  /* ========================================================== */
+  .bar-stage {
+    width: 100%; height: 72px;
+    border-radius: 18px;
+    overflow: hidden;
+    position: relative;
+    background: rgba(15, 15, 20, 0.85);
+    backdrop-filter: blur(20px);
+    border: 1px solid rgba(255,255,255,0.08);
+    display: flex; align-items: center;
+    padding: 0 20px; gap: 16px;
+  }
+  .s4 .cover {
+    width: 44px; height: 44px; border-radius: 8px;
+    background:
+      radial-gradient(circle at 30% 30%, #b97a3a 0%, #4a2a5a 60%, #1a1020 100%);
+    flex-shrink: 0;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+  }
+  .s4 .stack {
+    flex: 1; min-width: 0;
+    display: flex; flex-direction: column; gap: 2px;
+    overflow: hidden;
+  }
+  .s4 .curr {
+    font-size: 15px; font-weight: 600;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .s4 .next { font-size: 11px; opacity: 0.45;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .s4 .meta {
+    font-size: 10px; opacity: 0.5;
+    flex-shrink: 0;
+    text-align: right;
+  }
+  .s4 .meta b { display: block; font-weight: 600; opacity: 0.85; }
+
+  /* ========================================================== */
+  /*  STYLE 5 — 纯文字无背景（描边只看字）                        */
+  /* ========================================================== */
+  .s5 .stage { background: transparent; }
+  .s5 .checker {
+    position: absolute; inset: 0;
+    background:
+      linear-gradient(45deg, #222 25%, transparent 25%),
+      linear-gradient(-45deg, #222 25%, transparent 25%),
+      linear-gradient(45deg, transparent 75%, #222 75%),
+      linear-gradient(-45deg, transparent 75%, #222 75%);
+    background-size: 20px 20px;
+    background-position: 0 0, 0 10px, 10px -10px, 10px 0;
+    opacity: 0.4;
+  }
+  .s5 .lyrics {
+    position: absolute; inset: 0;
+    display: flex; flex-direction: column;
+    justify-content: center; align-items: center;
+    padding: 0 20px; gap: 8px; text-align: center;
+  }
+  .s5 .prev, .s5 .next { font-size: 13px; opacity: 0.55;
+    color: #fff;
+    -webkit-text-stroke: 0.8px rgba(0,0,0,0.9);
+    text-shadow: 0 2px 6px rgba(0,0,0,0.6);
+  }
+  .s5 .curr {
+    font-size: 28px; font-weight: 800;
+    color: #fff;
+    -webkit-text-stroke: 1.5px rgba(0,0,0,0.9);
+    text-shadow:
+      0 0 12px rgba(0,0,0,0.5),
+      0 3px 10px rgba(0,0,0,0.7);
+    letter-spacing: 0.5px;
+  }
+
+  /* ========================================================== */
+  /*  STYLE 6 — 磁带 / 老式 LED 红屏                              */
+  /* ========================================================== */
+  .s6 .stage {
+    background: #0a0605;
+    box-shadow: inset 0 0 60px rgba(0,0,0,0.8);
+  }
+  .s6 .scanlines {
+    position: absolute; inset: 0;
+    background: repeating-linear-gradient(
+      0deg,
+      rgba(255, 60, 30, 0.05) 0px,
+      rgba(255, 60, 30, 0.05) 1px,
+      transparent 1px,
+      transparent 3px
+    );
+    pointer-events: none;
+  }
+  .s6 .lyrics {
+    position: absolute; inset: 0;
+    display: flex; flex-direction: column;
+    justify-content: center; align-items: center;
+    padding: 0 20px; gap: 10px; text-align: center;
+    font-family: "SF Mono", Menlo, monospace;
+  }
+  .s6 .prev, .s6 .next { font-size: 13px; color: #aa2a12; opacity: 0.6; }
+  .s6 .curr {
+    font-size: 24px; font-weight: 700;
+    color: #ff4822;
+    text-shadow:
+      0 0 4px #ff4822,
+      0 0 10px rgba(255,70,30,0.6),
+      0 0 20px rgba(255,70,30,0.3);
+    letter-spacing: 1px;
+  }
+  .s6 .meta {
+    position: absolute; top: 10px; left: 14px;
+    font-size: 10px; color: #aa2a12; opacity: 0.7;
+    font-family: "SF Mono", Menlo, monospace;
+  }
+
+  /* karaoke animation */
+  @keyframes karaoke {
+    from { --karaoke: 0%; }
+    to   { --karaoke: 100%; }
+  }
+  @property --karaoke {
+    syntax: '<percentage>';
+    initial-value: 0%;
+    inherits: false;
+  }
+  .s3 .curr { animation: karaoke 3.5s linear infinite; }
+</style>
+</head>
+<body>
+
+<h1>歌词样式 Demo</h1>
+<div class="sub">当前行固定为「暗くてぬるい部屋で」（来自 <b>寄り酔い · DAZBEE</b>）。挑一个告诉我编号，我就把 app 改成那个风格。</div>
+
+<div class="grid">
+
+  <!-- 1 -->
+  <div class="card">
+    <h2>① 网易云沉浸风（当前在用的，精修版）</h2>
+    <div class="note">封面模糊做底 + 暗角，当前行大字居中，前后行淡化。最稳妥。</div>
+    <div class="stage s1">
+      <div class="bg-album"></div>
+      <div class="bg-tint"></div>
+      <div class="meta"><b>寄り酔い</b> · DAZBEE</div>
+      <div class="lyrics">
+        <div class="line prev">火照って ふらついて 肩触れ合う夜に</div>
+        <div class="line curr">暗くてぬるい部屋で</div>
+        <div class="line next">甘くなる吐息の音</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 2 -->
+  <div class="card">
+    <h2>② Apple Music 风（左对齐 + 超大当前行）</h2>
+    <div class="note">大字不居中、往左贴，其他行作为"阴影"堆在下面，封面铺整片。偏杂志感。</div>
+    <div class="stage s2">
+      <div class="bg-album"></div>
+      <div class="bg-tint"></div>
+      <div class="lyrics">
+        <div class="line">火照って ふらついて 肩触れ合う夜に</div>
+        <div class="line curr">暗くてぬるい部屋で</div>
+        <div class="line">甘くなる吐息の音</div>
+      </div>
+      <div class="meta"><span>寄り酔い · DAZBEE</span><span>2:14 / 3:38</span></div>
+    </div>
+  </div>
+
+  <!-- 3 -->
+  <div class="card">
+    <h2>③ 卡拉OK 逐字高亮</h2>
+    <div class="note">当前行从左到右渐次点亮（演示用 3.5s 循环动画）。需要网易云的 yrc 逐字数据接口，同步精度要求高。</div>
+    <div class="stage s3">
+      <div class="bg-album"></div>
+      <div class="bg-tint"></div>
+      <div class="meta">寄り酔い · DAZBEE</div>
+      <div class="lyrics">
+        <div class="line prev">火照って ふらついて 肩触れ合う夜に</div>
+        <div class="line curr">暗くてぬるい部屋で</div>
+        <div class="line next">甘くなる吐息の音</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 4 -->
+  <div class="card">
+    <h2>④ 极简横条（屏幕顶/底 dock 风）</h2>
+    <div class="note">小巧一条贴在屏幕顶部，占地最少、最不抢注意力。适合一直开着写代码。</div>
+    <div class="bar-stage s4">
+      <div class="cover"></div>
+      <div class="stack">
+        <div class="curr">暗くてぬるい部屋で</div>
+        <div class="next">甘くなる吐息の音</div>
+      </div>
+      <div class="meta"><b>寄り酔い</b>DAZBEE</div>
+    </div>
+  </div>
+
+  <!-- 5 -->
+  <div class="card">
+    <h2>⑤ 纯文字描边（无背景）</h2>
+    <div class="note">窗口完全透明，只有歌词本身漂在桌面上。下方是棋盘格代表桌面，实际使用时就是你真实的桌面。最极客。</div>
+    <div class="stage s5">
+      <div class="checker"></div>
+      <div class="lyrics">
+        <div class="line prev">火照って ふらついて 肩触れ合う夜に</div>
+        <div class="line curr">暗くてぬるい部屋で</div>
+        <div class="line next">甘くなる吐息の音</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 6 -->
+  <div class="card">
+    <h2>⑥ 复古 LED 红屏</h2>
+    <div class="note">老式音响显示屏那种橙红色发光 + 扫描线。纯玩性，放桌面当氛围组。</div>
+    <div class="stage s6">
+      <div class="scanlines"></div>
+      <div class="meta">▶ 寄り酔い — DAZBEE</div>
+      <div class="lyrics">
+        <div class="line prev">火照って ふらついて 肩触れ合う夜に</div>
+        <div class="line curr">暗くてぬるい部屋で</div>
+        <div class="line next">甘くなる吐息の音</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>

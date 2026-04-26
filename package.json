@@ -1,0 +1,12 @@
+{
+  "name": "echo",
+  "version": "0.1.0",
+  "description": "Always-on-top lyrics widget for muse (macOS, NetEase Cloud Music)",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron ."
+  },
+  "devDependencies": {
+    "electron": "^33.4.11"
+  }
+}

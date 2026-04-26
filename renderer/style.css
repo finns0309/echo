@@ -1,0 +1,1187 @@
+/* =========================================================================
+ *  Echo · component-style theming
+ *  ────────────────────────────────────────────────────────────────────────
+ *  Themes are composed from four orthogonal axes:
+ *    - layout  (data-layout)   stage | triplet | single
+ *    - reveal  (data-reveal)   wave | typewriter | ink | none
+ *    - frame   (data-frame)    full | cover-left
+ *    - tokens  (CSS custom properties on <body>, --fl-*)
+ *
+ *  The registry is renderer/themes.js — one entry per theme. Most themes
+ *  set tokens and nothing else. Themes flagged `customClass: true` also
+ *  get `body.theme-<name>`, which this file uses for the few effects that
+ *  tokens can't express (typewriter cursor, aura curr-line breathing,
+ *  minimal left-aligned mask).
+ *
+ *  To add a new standard theme:
+ *    1. Append an entry to renderer/themes.js.
+ *    2. Fill in tokens. Done.
+ *
+ *  To add a new reveal/animation: add a @keyframes + a
+ *  `body[data-reveal="<name>"] .stage-card .wi { animation: ... }` block
+ *  under §REVEALS.
+ *
+ *  To add a new layout or frame: append cases under §LAYOUTS / §FRAMES.
+ * ========================================================================= */
+
+/* ========================================================================= */
+/*  §RESET + GLOBALS                                                         */
+/* ========================================================================= */
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+:root {
+  --radius: 20px;
+  --ease-out:    cubic-bezier(0.2, 0.8, 0.2, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+
+  /* Responsive scale — written by app.js updateScale() from window diagonal.
+     Lyric rules multiply their base sizes by this so fullscreen gets large
+     immersive type without every theme needing its own breakpoints.
+     Themes can further bias with --fl-text-scale-bias (default 1). */
+  --fl-scale: 1;
+
+  /* Sampled from album cover at runtime. Tokens can reference these. */
+  --accent:       rgb(255, 230, 210);
+  --accent-soft:  rgba(255, 230, 210, 0.5);
+  --accent-glow:  rgba(255, 230, 210, 0.35);
+  --accent-comp:      hsl(200 60% 70%);
+  --accent-comp-soft: hsl(200 60% 70% / 0.55);
+  --ambient:      rgb(40, 40, 60);
+
+  /* Cover URL, written by app.js from the live track's cover. Themes that
+     don't override --fl-bg-image inherit this into #bg. */
+  --fl-cover-url: none;
+}
+
+html, body {
+  width: 100%; height: 100%;
+  overflow: hidden;
+  font-family: "SF Pro Display", -apple-system, BlinkMacSystemFont,
+               "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  font-feature-settings: "ss01", "ss02", "cv11";
+  -webkit-font-smoothing: antialiased;
+  color: #fff;
+  background: transparent;
+  user-select: none;
+  cursor: default;
+}
+body {
+  position: relative;
+  border-radius: var(--radius);
+  overflow: hidden;
+  -webkit-app-region: drag;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.06) inset,
+    0 0 0 0.5px rgba(255, 255, 255, 0.08) inset,
+    0 24px 60px -20px rgba(0, 0, 0, 0.5);
+}
+
+/* ========================================================================= */
+/*  §BACKGROUND + §TINT                                                      */
+/*  The two bottom-most layers. Entirely driven by tokens — most themes      */
+/*  never override these rules.                                              */
+/* ========================================================================= */
+#bg {
+  position: absolute; inset: 0;
+  background-image: var(--fl-bg-image, var(--fl-cover-url));
+  background-size: cover;
+  background-position: center;
+  transition: background-image 900ms var(--ease-out);
+  background-color: var(--fl-bg-color, #0b0b0f);
+  filter:
+    blur(calc(var(--fl-bg-blur, 0px) * var(--fl-blur-scale, 1)))
+    saturate(var(--fl-bg-saturate, 1))
+    brightness(var(--fl-bg-brightness, 1));
+  transform: scale(var(--fl-bg-scale, 1));
+  animation: var(--fl-bg-animation, none);
+  image-rendering: var(--fl-bg-rendering, auto);
+  box-shadow: var(--fl-bg-inset-shadow, none);
+  will-change: transform, filter;
+}
+
+/* Optional GPU shader layer, painted by renderer/fx.js when a theme sets
+   `fx: '<name>'`. Sits between #bg and #tint so vignette/grain can still
+   ride on top. Default display:none — fx.js flips it on. */
+#fx {
+  display: none;
+  position: absolute;
+  inset: 0;
+  /* Replaced elements (canvas) take their CSS box size from their width/height
+     ATTRIBUTES when no CSS width/height is set — even with inset:0. Without
+     these explicit 100%s, fx.js's resize() feeds the canvas's own attribute
+     value back through clientWidth and the backing buffer halves every frame. */
+  width: 100%;
+  height: 100%;
+  z-index: 1;
+  pointer-events: none;
+}
+
+#tint {
+  position: absolute;
+  inset: var(--fl-tint-inset, 0);
+  border-radius: var(--fl-tint-radius, 0);
+  pointer-events: none;
+  z-index: 2;
+  background: var(--fl-tint-image, none);
+  backdrop-filter: var(--fl-tint-backdrop, none);
+  -webkit-backdrop-filter: var(--fl-tint-backdrop, none);
+  border: var(--fl-tint-border, none);
+  box-shadow: var(--fl-tint-shadow, none);
+  mix-blend-mode: var(--fl-tint-blend, normal);
+  animation: var(--fl-tint-animation, none);
+}
+
+/* ========================================================================= */
+/*  §TOPBAR (title/artist + controls). Chrome is token-tunable.              */
+/* ========================================================================= */
+#topbar {
+  position: absolute;
+  /* Edge offsets grow with a capped, weaker-than-text scale so the topbar
+     doesn't look marooned in the corner at fullscreen. Button/pill sizes
+     themselves are NOT scaled — hit targets stay stable across window sizes. */
+  top:   calc(10px * min(var(--fl-scale), 1.8));
+  left:  calc(12px * min(var(--fl-scale), 1.8));
+  right: calc(12px * min(var(--fl-scale), 1.8));
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 11px;
+  z-index: 4;
+  opacity: 0;
+  transform: translateY(-4px);
+  transition: opacity 240ms var(--ease-out), transform 240ms var(--ease-out);
+}
+body:hover #topbar { opacity: 1; transform: translateY(0); }
+
+#meta {
+  max-width: 60%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: var(--fl-chrome-bg, rgba(0, 0, 0, 0.28));
+  backdrop-filter: blur(14px) saturate(1.4);
+  -webkit-backdrop-filter: blur(14px) saturate(1.4);
+  border: 0.5px solid var(--fl-chrome-border, rgba(255, 255, 255, 0.08));
+  color: var(--fl-chrome-fg, #fff);
+  letter-spacing: 0.3px;
+  font-size: 10.5px;
+}
+#meta #title  { font-weight: 600; }
+#meta #artist { opacity: 0.62; font-weight: 400; color: var(--fl-chrome-artist, inherit); }
+
+/* Fallback-mode indicator. Hidden by default; only shown when muse is not
+   the source. Sits outside #topbar so it's visible at all times (topbar is
+   hover-gated) — the user shouldn't have to hover to learn the lyric
+   timeline isn't authoritative. */
+#source-badge {
+  display: none;
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 10px;
+  letter-spacing: 0.4px;
+  color: rgba(255, 200, 120, 0.95);
+  background: rgba(120, 70, 20, 0.42);
+  border: 0.5px solid rgba(255, 180, 100, 0.4);
+  backdrop-filter: blur(14px) saturate(1.4);
+  -webkit-backdrop-filter: blur(14px) saturate(1.4);
+  cursor: help;
+  z-index: 5;
+  -webkit-app-region: no-drag;
+}
+body[data-source="mediaremote"] #source-badge { display: inline-block; }
+
+#buttons {
+  -webkit-app-region: no-drag;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px 4px;
+  border-radius: 999px;
+  background: var(--fl-chrome-bg, rgba(0, 0, 0, 0.28));
+  backdrop-filter: blur(14px) saturate(1.4);
+  -webkit-backdrop-filter: blur(14px) saturate(1.4);
+  border: 0.5px solid var(--fl-chrome-border, rgba(255, 255, 255, 0.08));
+}
+#buttons .divider {
+  width: 1px; height: 12px;
+  background: var(--fl-chrome-border, rgba(255, 255, 255, 0.14));
+  margin: 0 3px;
+}
+#buttons button {
+  background: transparent;
+  color: var(--fl-chrome-fg, rgba(255, 255, 255, 0.82));
+  border: none;
+  width: 22px; height: 22px;
+  border-radius: 999px;
+  font-size: 12px; font-weight: 500;
+  cursor: pointer;
+  line-height: 1;
+  padding: 0;
+  transition: background 160ms var(--ease-out),
+              color 160ms var(--ease-out),
+              transform 120ms var(--ease-out);
+}
+#buttons button:hover {
+  background: var(--fl-chrome-btn-hover-bg, rgba(255, 255, 255, 0.14));
+  color: var(--fl-chrome-fg, #fff);
+}
+#buttons button:active { transform: scale(0.88); }
+#buttons #close:hover {
+  background: rgba(255, 80, 80, 0.75);
+  color: #fff;
+}
+
+/* ========================================================================= */
+/*  §TOAST                                                                   */
+/* ========================================================================= */
+#toast {
+  position: absolute;
+  top: 44px; left: 50%;
+  transform: translateX(-50%) translateY(-4px);
+  padding: 6px 14px;
+  font-size: 11px;
+  letter-spacing: 0.4px;
+  background: rgba(0, 0, 0, 0.6);
+  color: rgba(255, 255, 255, 0.94);
+  border-radius: 999px;
+  z-index: 10;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 280ms var(--ease-out), transform 280ms var(--ease-out);
+  backdrop-filter: blur(14px) saturate(1.4);
+  -webkit-backdrop-filter: blur(14px) saturate(1.4);
+  border: 0.5px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 6px 20px -8px rgba(0, 0, 0, 0.5);
+}
+#toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+/* ========================================================================= */
+/*  §LYRICS (triplet + single)                                               */
+/* ========================================================================= */
+#lyrics {
+  position: absolute; inset: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 0 32px 20px;
+  gap: 10px;
+  z-index: 3;
+}
+.line {
+  width: 100%;
+  line-height: 1.24;
+  letter-spacing: var(--fl-letter-spacing, 0.2px);
+  word-break: break-word;
+  font-family: var(--fl-text-font, inherit);
+  color: var(--fl-text-color, #fff);
+  text-shadow: var(--fl-text-shadow, none);
+  text-transform: var(--fl-text-transform, none);
+  will-change: transform, opacity, filter;
+}
+
+/* ========================================================================= */
+/*  §STAGE (floating cards at center; default layout for most themes)        */
+/*  Each rendered line becomes one .stage-card. Old cards drift up and blur. */
+/* ========================================================================= */
+#stage {
+  display: none;
+  position: absolute; inset: 0;
+  z-index: 3;
+  pointer-events: none;
+  overflow: hidden;
+}
+.stage-card {
+  position: absolute;
+  top: 50%; left: 0; right: 0;
+  /* Side padding grows with scale (capped) so fullscreen text breathes
+     instead of spanning edge-to-edge; min 40px keeps small windows tidy. */
+  padding: 0 clamp(40px, calc(40px * var(--fl-scale)), 180px);
+  text-align: center;
+  transform: translateY(-50%);
+  font-family:    var(--fl-text-font, inherit);
+  font-size:      calc(var(--fl-text-size, 34px) * var(--fl-scale) * var(--fl-text-scale-bias, 1));
+  font-weight:    var(--fl-text-weight, 700);
+  line-height:    1.2;
+  letter-spacing: var(--fl-letter-spacing, 0.4px);
+  text-transform: var(--fl-text-transform, none);
+  color:          var(--fl-text-color, #fffaf2);
+  text-shadow:    var(--fl-text-shadow, 0 2px 14px rgba(0, 0, 0, 0.4));
+  -webkit-text-stroke: var(--fl-text-stroke, 0);
+  filter:         var(--fl-text-filter, none);
+  will-change: transform, opacity, filter;
+  transition:
+    transform 2200ms cubic-bezier(0.22, 1, 0.36, 1),
+    opacity   2200ms cubic-bezier(0.22, 1, 0.36, 1),
+    filter    2200ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.stage-card.leaving {
+  /* Leave distance scales with window — otherwise on a fullscreen canvas the
+     departing line barely moves and the new one visually crashes into it. */
+  transform: translateY(calc(-50% - calc(70px * var(--fl-scale))));
+  filter:    var(--fl-leave-filter, blur(12px));
+  opacity: 0;
+}
+
+.stage-card .w {
+  display: inline-block;
+  animation: w-float var(--fd, 5s) ease-in-out infinite;
+  animation-delay: var(--fdelay, 0s);
+  will-change: transform;
+}
+.stage-card .w .wi {
+  display: inline-block;
+  will-change: transform, opacity, filter;
+}
+@keyframes w-float {
+  0%, 100% { transform: translate(0, 0); }
+  25%      { transform: translate(0.4px,  calc(var(--fy, 2px) * -1)); }
+  50%      { transform: translate(-0.3px, 0); }
+  75%      { transform: translate(0.2px,  var(--fy, 2px)); }
+}
+
+/* ========================================================================= */
+/*  §REVEALS — per-char entrance animation library                           */
+/*  Each maps a `data-reveal="<name>"` to a .wi animation. Adding a new      */
+/*  reveal = one @keyframes + one selector.                                  */
+/* ========================================================================= */
+
+/* wave · blur + translate fade-in, with a traveling sine on the word wrapper */
+body[data-reveal="wave"] .stage-card .wi {
+  opacity: 0;
+  filter: blur(18px);
+  transform: translateY(18px) scale(0.88);
+  animation: reveal-wave 900ms cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+  animation-delay: calc(var(--i) * 42ms);
+}
+@keyframes reveal-wave {
+  0%   { opacity: 0; filter: blur(18px); transform: translateY(18px) scale(0.88); }
+  60%  { opacity: 1; }
+  100% { opacity: 1; filter: blur(0);    transform: translateY(0)    scale(1); }
+}
+body[data-reveal="wave"] .stage-card .w {
+  animation: reveal-wave-travel 2.4s ease-in-out infinite;
+  animation-delay: calc(var(--i) * -120ms);
+}
+@keyframes reveal-wave-travel {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-9px); }
+}
+
+/* typewriter · per-char pop with a subtle rise + micro-overshoot so each
+   character feels "struck" rather than dissolving in. Stagger is slower
+   than the old 55ms/60ms so the rhythm is visible to the eye. */
+body[data-reveal="typewriter"] .stage-card .w { animation: none; }
+body[data-reveal="typewriter"] .stage-card .wi {
+  opacity: 0;
+  transform: translateY(0.28em) scale(0.82);
+  animation: reveal-typewriter 260ms cubic-bezier(0.2, 1.3, 0.4, 1) forwards;
+  animation-delay: calc(var(--i) * 95ms);
+}
+@keyframes reveal-typewriter {
+  0%   { opacity: 0;    transform: translateY(0.28em) scale(0.82); }
+  55%  { opacity: 1;    transform: translateY(-0.04em) scale(1.04); }
+  100% { opacity: 1;    transform: translateY(0)       scale(1); }
+}
+
+/* ink · blur + scale bloom */
+body[data-reveal="ink"] .stage-card .wi {
+  opacity: 0;
+  filter: blur(14px);
+  transform: translateY(6px) scale(1.3);
+  animation: reveal-ink 700ms cubic-bezier(0.3, 0.8, 0.4, 1) forwards;
+  animation-delay: calc(var(--i) * 70ms);
+}
+@keyframes reveal-ink {
+  0%   { opacity: 0;    filter: blur(14px); transform: translateY(6px) scale(1.3); }
+  40%  { opacity: 0.85; filter: blur(3px);  transform: translateY(0)   scale(1.05); }
+  100% { opacity: 1;    filter: blur(0);    transform: translateY(0)   scale(1); }
+}
+
+/* glint · Folia-style bright sweep across the current line */
+body[data-reveal="glint"] .stage-card .w {
+  animation: glint-float var(--fd, 5.8s) ease-in-out infinite;
+  animation-delay: var(--fdelay, 0s);
+}
+body[data-reveal="glint"] .stage-card .wi {
+  opacity: 0;
+  filter: blur(16px) brightness(1.6);
+  transform: translateY(14px) scale(0.92);
+  animation: reveal-glint 1200ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  animation-delay: calc(var(--i) * 34ms);
+}
+@keyframes reveal-glint {
+  0%   { opacity: 0; filter: blur(16px) brightness(1.7); transform: translateY(14px) scale(0.92); text-shadow: none; }
+  42%  { opacity: 1; filter: blur(1px) brightness(1.35); transform: translateY(-3px) scale(1.05); text-shadow: 0 0 18px var(--accent), 0 0 34px var(--accent-glow); }
+  100% { opacity: 1; filter: blur(0) brightness(1); transform: translateY(0) scale(1); text-shadow: inherit; }
+}
+@keyframes glint-float {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  45%      { transform: translateY(-5px) rotate(-0.3deg); }
+  70%      { transform: translateY(2px) rotate(0.2deg); }
+}
+
+/* karaoke · per-token timing-driven pop. Each .wi starts hidden and waits;
+   when JS adds .now (because the song reached this token's timestamp), the
+   keyframe fires once, throwing the token outward at a random angle/offset
+   (--rot, --dx written by renderStage) before settling. Reads as "every
+   character explodes out at its own moment" rather than the uniform-stagger
+   reveals above. Real yrc data drives this when available; synthetic timing
+   from line duration drives it when not. */
+body[data-reveal="karaoke"] .stage-card .w  { animation: none; }
+body[data-reveal="karaoke"] .stage-card .wi {
+  opacity: 0;
+  transform: translate(var(--dx, 0), 0.6em) scale(0.4) rotate(var(--rot, 0deg));
+  filter: blur(8px);
+  display: inline-block; /* required for transform on inline content */
+}
+body[data-reveal="karaoke"] .stage-card .wi.now {
+  animation: reveal-karaoke 720ms cubic-bezier(0.18, 1.7, 0.4, 1) forwards;
+}
+@keyframes reveal-karaoke {
+  0%   { opacity: 0;
+         transform: translate(var(--dx, 0), 0.6em) scale(0.4) rotate(var(--rot, 0deg));
+         filter: blur(8px); }
+  45%  { opacity: 1;
+         transform: translate(calc(var(--dx, 0) * 0.3), -0.18em) scale(1.22) rotate(calc(var(--rot, 0deg) * 0.4));
+         filter: blur(0); }
+  72%  { transform: translate(0, 0.04em) scale(0.96) rotate(0deg); }
+  100% { opacity: 1;
+         transform: translate(0, 0) scale(1) rotate(0);
+         filter: blur(0); }
+}
+
+/* none · no reveal (used by triplet/single layouts that don't render stage) */
+body[data-reveal="none"] .stage-card .w  { animation: none; }
+body[data-reveal="none"] .stage-card .wi { opacity: 1; }
+
+/* ========================================================================= */
+/*  §LAYOUTS — dispatch which DOM subtree is visible                         */
+/* ========================================================================= */
+body[data-layout="stage"]   #lyrics { display: none; }
+body[data-layout="stage"]   #stage  { display: block; }
+body[data-layout="triplet"] #lyrics { display: flex; }
+body[data-layout="triplet"] #stage  { display: none; }
+body[data-layout="single"]  #lyrics { display: flex; }
+body[data-layout="single"]  #stage  { display: none; }
+body[data-layout="single"]  #lyrics .line.prev,
+body[data-layout="single"]  #lyrics .line.next { display: none; }
+
+/* solo layout — instrumental visualizer. Hides everything except #solo,
+   which is a full-canvas spectrum + particle renderer with title overlay.
+   No cover image is shown (#bg/#tint hidden) — by design: instrumentals
+   shouldn't borrow lyric-track chrome. */
+body[data-layout="solo"] #lyrics,
+body[data-layout="solo"] #stage,
+body[data-layout="solo"] #cover-panel,
+body[data-layout="solo"] #bg,
+body[data-layout="solo"] #tint { display: none; }
+body[data-layout="solo"] #solo { display: block; }
+
+/* conversation layout — chat-style bubble stream. Used by imsg/duet themes
+   (and any future "lyrics as dialogue" variant). Hides the standard lyric
+   surfaces and shows #convo, which JS lazy-builds with header/stream/typing. */
+body[data-layout="conversation"] #lyrics,
+body[data-layout="conversation"] #stage,
+body[data-layout="conversation"] #cover-panel { display: none; }
+body[data-layout="conversation"] #convo { display: flex; }
+
+/* danmaku layout — desktop barrage. Each lyric line is appended to #danmaku
+   as a .dm-line that flies right→left and self-removes on animationend.
+   Multiple lines coexist on screen (a real danmaku feeling). */
+body[data-layout="danmaku"] #lyrics,
+body[data-layout="danmaku"] #stage,
+body[data-layout="danmaku"] #cover-panel,
+body[data-layout="danmaku"] #bg,
+body[data-layout="danmaku"] #tint,
+body[data-layout="danmaku"] #fx { display: none; }
+body[data-layout="danmaku"] #danmaku { display: block; }
+
+/* triplet default look — prev/next muted, curr emphasized */
+body[data-layout="triplet"] .line {
+  transition:
+    opacity 360ms var(--ease-out),
+    transform 420ms var(--ease-spring),
+    font-weight 360ms var(--ease-out);
+}
+body[data-layout="triplet"] .line.prev,
+body[data-layout="triplet"] .line.next {
+  font-size: calc(var(--fl-prev-size, 14.5px) * var(--fl-scale) * var(--fl-text-scale-bias, 1));
+  font-weight: 500;
+  color: var(--fl-prev-color, rgba(255, 255, 255, 0.42));
+  letter-spacing: 0.1px;
+}
+body[data-layout="triplet"] .line.curr {
+  font-size: calc(var(--fl-text-size, 28px) * var(--fl-scale) * var(--fl-text-scale-bias, 1));
+  font-weight: var(--fl-text-weight, 800);
+  opacity: 1;
+  letter-spacing: 0.2px;
+}
+body[data-layout="triplet"] .line.curr.changing {
+  opacity: 0.12;
+  transform: translateY(8px);
+  filter: blur(1px);
+}
+
+/* single default look — one giant line, centered */
+body[data-layout="single"] #lyrics {
+  text-align: center;
+  justify-content: center;
+  align-items: center;
+  padding: 20px 44px;
+}
+body[data-layout="single"] .line.curr {
+  font-size: calc(var(--fl-text-size, 34px) * var(--fl-scale) * var(--fl-text-scale-bias, 1));
+  font-weight: var(--fl-text-weight, 700);
+  transition:
+    opacity 420ms var(--ease-out),
+    filter 420ms var(--ease-out),
+    transform 520ms var(--ease-spring),
+    letter-spacing 420ms var(--ease-out);
+}
+body[data-layout="single"] .line.curr.changing {
+  opacity: 0;
+  filter: blur(14px);
+  transform: scale(0.96) translateY(6px);
+  letter-spacing: 4px;
+}
+
+/* ========================================================================= */
+/*  §FRAMES — window-level layout                                            */
+/*  full (default):          lyrics fill the window                          */
+/*  cover-left:              left square = album cover 1:1, right = lyrics   */
+/*                           No theme in the registry uses this yet — it's   */
+/*                           wired up so you can set `frame: 'cover-left'`   */
+/*                           on a new theme and have it just work.           */
+/* ========================================================================= */
+#cover-panel {
+  display: none;
+  position: absolute;
+  top: 0; bottom: 0; left: 0;
+  aspect-ratio: 1 / 1;
+  z-index: 1;
+  overflow: hidden;
+}
+#cover-panel img {
+  width: 100%; height: 100%;
+  object-fit: cover;
+  display: block;
+}
+body[data-frame="cover-left"] #cover-panel { display: block; }
+body[data-frame="cover-left"] #lyrics,
+body[data-frame="cover-left"] #stage,
+body[data-frame="cover-left"] #bg,
+body[data-frame="cover-left"] #tint {
+  /* Cover is aspect-ratio 1:1, so its width == the window height. 100vh
+     lines up the remaining panels flush with the cover's right edge.
+     JS can override --fl-frame-cover-size if a theme wants a specific
+     pixel size or a different split ratio. */
+  left: var(--fl-frame-cover-size, 100vh);
+}
+
+/* ========================================================================= */
+/*  §BESPOKE THEME BLOCKS                                                    */
+/*  Only for themes flagged `customClass: true` in themes.js. Keep each      */
+/*  block small — if you find yourself writing 20+ lines here, consider      */
+/*  adding a new reveal or token instead.                                    */
+/* ========================================================================= */
+
+/* ----- typewriter · blinking cursor after the line ----- */
+body.theme-typewriter .stage-card::after {
+  content: '▍';
+  display: inline-block;
+  margin-left: calc(3px * var(--fl-scale));
+  color: #2a2018;
+  opacity: 0.85;
+  /* Cursor inherits font-size from .stage-card so it scales automatically;
+     we only slow the blink at fullscreen so it feels deliberate, not frantic. */
+  animation: tw-blink clamp(0.9s, calc(0.7s * var(--fl-scale)), 1.6s) steps(2) infinite;
+}
+@keyframes tw-blink { 50% { opacity: 0; } }
+body.theme-typewriter .stage-card.leaving {
+  /* Old line drops straight down with a slight fade — reads as "page ejected"
+     rather than "blurred out", which fits the paper aesthetic better. */
+  transform: translateY(calc(-50% + calc(40px * var(--fl-scale))));
+  filter: blur(0);
+  opacity: 0;
+  transition:
+    transform 620ms cubic-bezier(0.4, 0, 0.2, 1),
+    opacity   420ms ease-out;
+}
+
+/* ----- aura · breathing pulse on the active line ----- */
+body.theme-aura .line.curr {
+  background-image: linear-gradient(180deg, rgba(255,255,255,1) 0%, rgba(255,240,225,0.92) 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  filter:
+    drop-shadow(0 0 18px rgba(255, 235, 210, 0.28))
+    drop-shadow(0 2px 12px rgba(0, 0, 0, 0.35));
+  animation: aura-curr-breathe 6s ease-in-out infinite;
+}
+@keyframes aura-curr-breathe {
+  0%, 100% { transform: scale(1);     }
+  50%      { transform: scale(1.012); }
+}
+@keyframes aura-breathe {
+  0%, 100% { transform: scale(1.60) translate(0,     0)     rotate(0deg);   }
+  25%      { transform: scale(1.66) translate(-14px, -10px) rotate(0.4deg); }
+  50%      { transform: scale(1.63) translate(12px,  -6px)  rotate(-0.3deg);}
+  75%      { transform: scale(1.68) translate(8px,   10px)  rotate(0.2deg); }
+}
+
+/* ----- minimal · Apple Music left-align + soft mask fade on prev/next ----- */
+body.theme-minimal #lyrics {
+  text-align: left;
+  padding: 0 30px 26px;
+  -webkit-mask-image: linear-gradient(180deg, transparent 0%, #000 18%, #000 82%, transparent 100%);
+          mask-image: linear-gradient(180deg, transparent 0%, #000 18%, #000 82%, transparent 100%);
+}
+body.theme-minimal .line      { text-shadow: 0 2px 14px rgba(0, 0, 0, 0.55); }
+body.theme-minimal .line.curr { font-size: calc(28px * var(--fl-scale)); font-weight: 800; color: #fff; letter-spacing: 0.2px; }
+
+/* ----- folio · luminous line focus with faint stage geometry ----- */
+body.theme-folio::before {
+  content: '';
+  position: absolute;
+  /* Inset scales with window so the frame stays a modest decorative rim at
+     fullscreen instead of a canvas-wide pill. Radius uses the window's own
+     --radius × 2 (a soft rounded rectangle) rather than 999px, which at
+     fullscreen would render as a weird elongated oval. */
+  inset: calc(18px * var(--fl-scale)) calc(22px * var(--fl-scale));
+  z-index: 2;
+  pointer-events: none;
+  border-radius: calc(var(--radius) * 2);
+  border: 0.5px solid rgba(255, 255, 255, 0.08);
+  box-shadow:
+    0 0 0 1px rgba(255,255,255,0.02) inset,
+    0 0 calc(56px * var(--fl-scale)) calc(-32px * var(--fl-scale)) var(--accent);
+  opacity: 0.7;
+}
+body.theme-folio #stage {
+  -webkit-mask-image: linear-gradient(90deg, transparent 0%, #000 10%, #000 90%, transparent 100%);
+          mask-image: linear-gradient(90deg, transparent 0%, #000 10%, #000 90%, transparent 100%);
+}
+body.theme-folio .stage-card {
+  top: 52%;
+  padding: 0 34px;
+}
+body.theme-folio .stage-card.leaving {
+  transform: translateY(calc(-50% - 54px)) scale(0.94);
+  opacity: 0;
+}
+
+/* ----- sleeve · album cover as a compact player surrogate ----- */
+body.theme-sleeve {
+  --radius: 16px;
+}
+body.theme-sleeve #cover-panel {
+  box-shadow:
+    1px 0 0 rgba(255, 255, 255, 0.08),
+    24px 0 52px -30px rgba(0, 0, 0, 0.85);
+}
+body.theme-sleeve #cover-panel img {
+  filter: saturate(1.05) contrast(1.03);
+}
+body.theme-sleeve #lyrics {
+  justify-content: center;
+  text-align: left;
+  padding: 34px 28px 22px 24px;
+  gap: 8px;
+}
+body.theme-sleeve .line {
+  text-wrap: balance;
+}
+body.theme-sleeve .line.curr {
+  max-width: 22ch;
+  color: #fffaf5;
+}
+body.theme-sleeve .line.curr.changing {
+  transform: translateY(5px);
+  filter: blur(2px);
+}
+body.theme-sleeve .line.prev,
+body.theme-sleeve .line.next {
+  max-width: 30ch;
+}
+body.theme-sleeve #meta {
+  /* Floor the max-width so ultra-wide or very-tall fullscreen windows (where
+     100vh exceeds the lyric panel's share of the width) don't collapse the
+     title pill to zero. 140px is enough to show "title · artist" truncated. */
+  max-width: max(140px, calc(100% - var(--fl-frame-cover-size, 100vh) - 116px));
+}
+
+/* ----- piano · Deemo-inspired rainy-piano ballad ----- */
+/* Rain animation: only the third tint-image layer moves. The first two
+   (vignette + sepia wash) stay anchored to 0,0 while the hatching slides
+   down-left, giving the impression of falling rain behind the lyric. */
+@keyframes rain-fall {
+  0%   { background-position: 0 0, 0 0, 0 0; }
+  100% { background-position: 0 0, 0 0, -72px 240px; }
+}
+
+/* Piano-key strip — 24 white keys spanning the bottom, with black keys
+   overlaid at standard positions (after white indices 0,1,3,4,5 mod 7).
+   Fades into the scene via a soft top mask so it reads as atmospheric,
+   not chrome. */
+#piano-keys {
+  display: none;
+  position: absolute;
+  left: 0; right: 0; bottom: 0;
+  height: calc(72px * var(--fl-scale, 1));
+  z-index: 3;
+  pointer-events: none;
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(180deg, transparent 0%, #000 42%, #000 100%);
+          mask-image: linear-gradient(180deg, transparent 0%, #000 42%, #000 100%);
+}
+body.theme-piano #piano-keys { display: block; }
+
+/* Lift lyric text so the current line doesn't collide with the key strip. */
+body.theme-piano #lyrics {
+  padding-bottom: calc(60px * var(--fl-scale, 1));
+}
+body.theme-piano .line.curr {
+  font-style: italic;
+  text-wrap: balance;
+  max-width: 26ch;
+}
+/* Dim change animation: let serifs ease rather than snap — piano ballads
+   breathe, they don't swap. */
+body.theme-piano .line.curr.changing {
+  opacity: 0;
+  filter: blur(10px);
+  letter-spacing: 8px;
+  transform: translateY(4px);
+}
+
+#piano-keys .pk {
+  position: absolute;
+  /* --i is written by JS (buildPianoKeys). 24 white keys evenly distributed. */
+}
+/* Keys are driven by a per-element --lit CSS variable in [0,1], written
+   every frame by applySpectrumToPiano(). No CSS transitions here — JS
+   already does the envelope smoothing; adding a CSS transition would
+   lag the audio visibly. */
+#piano-keys .pk.w {
+  bottom: 0;
+  width: calc(100% / 24);
+  height: 100%;
+  left: calc((100% / 24) * var(--i));
+  background: linear-gradient(180deg,
+    rgba(255, 240, 210, calc(0.05 + var(--lit, 0) * 0.45)),
+    rgba(255, 220, 170, calc(0.015 + var(--lit, 0) * 0.12)));
+  border-right: 0.5px solid rgba(0,0,0,0.45);
+  border-top: 0.5px solid rgba(245,238,225,0.10);
+  box-shadow: 0
+    calc(-22px * var(--lit, 0))
+    calc(36px * var(--lit, 0))
+    rgba(255, 225, 170, calc(0.32 * var(--lit, 0)));
+}
+#piano-keys .pk.b {
+  top: 0;
+  /* Black key centered on border between white i and i+1: left edge at
+     (i + 1 - half_ratio) · (100%/24). half_ratio = 0.31. */
+  width: calc((100% / 24) * 0.62);
+  height: 62%;
+  left: calc((100% / 24) * (var(--i) + 0.69));
+  background: linear-gradient(180deg,
+    rgba(18, 14, 10, calc(0.9 - var(--lit, 0) * 0.35)),
+    rgba(30, 22, 15, calc(0.7 - var(--lit, 0) * 0.25)));
+  border-radius: 0 0 3px 3px;
+  border: 0.5px solid rgba(0,0,0,0.75);
+  box-shadow:
+    0 calc(-12px * var(--lit, 0)) calc(22px * var(--lit, 0)) rgba(255, 210, 140, calc(0.5 * var(--lit, 0))),
+    0 2px 4px rgba(0,0,0,0.28) inset;
+}
+
+/* ----- danmaku · fullscreen barrage / 弹幕 ----- */
+/* Body chrome is suppressed entirely so the canvas reads as a transparent
+   overlay on whatever's behind the window. Pair with click-through (◌
+   button) to leave the lyrics drifting on top of your actual workflow. */
+body.theme-danmaku {
+  box-shadow: none;
+  border-radius: 0;
+}
+#danmaku {
+  display: none;
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+  overflow: hidden;
+}
+.dm-line {
+  position: absolute;
+  top: var(--y, 50%);
+  left: 0;
+  white-space: nowrap;
+  font-family:    var(--fl-text-font, inherit);
+  font-size:      calc(var(--fl-text-size, 32px) * var(--fl-scale, 1) * var(--fl-text-scale-bias, 1));
+  font-weight:    var(--fl-text-weight, 700);
+  letter-spacing: var(--fl-letter-spacing, 0.4px);
+  color:          var(--fl-text-color, #fff);
+  text-shadow:    var(--fl-text-shadow, 0 2px 6px rgba(0,0,0,0.85));
+  -webkit-text-stroke: var(--fl-text-stroke, 0);
+  /* Start fully off the right edge; end fully off the left.
+     Total travel = window-width + own-width; we let CSS animate transform
+     while `left: 0` keeps the element anchored to the canvas's left edge. */
+  transform: translate3d(100vw, 0, 0);
+  animation: dm-fly var(--dur, 12s) linear forwards;
+  will-change: transform;
+}
+@keyframes dm-fly {
+  from { transform: translate3d(100vw,  0, 0); }
+  to   { transform: translate3d(-100%,  0, 0); }
+}
+
+/* ----- solo · instrumental visualizer ----- */
+/* Container fills the window; canvas is absolutely positioned behind the
+   meta block so it covers all of it. Meta is centered, layered on top. */
+#solo {
+  display: none;
+  position: absolute; inset: 0;
+  z-index: 3;
+  background: var(--fl-bg-color, #08060e);
+  overflow: hidden;
+}
+#solo #solo-fx {
+  position: absolute; inset: 0;
+  width: 100%; height: 100%;
+  display: block;
+}
+#solo .solo-meta {
+  position: absolute;
+  inset: 0;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  text-align: center;
+  pointer-events: none;
+  padding: 0 30px;
+  text-shadow: 0 2px 14px rgba(0,0,0,0.7), 0 0 24px var(--accent-glow);
+}
+#solo .solo-title {
+  font-family: var(--fl-text-font, inherit);
+  font-size: calc(20px * var(--fl-scale, 1) * var(--fl-text-scale-bias, 1));
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  color: #fffaf2;
+  max-width: 80%;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+#solo .solo-artist {
+  margin-top: 6px;
+  font-size: calc(12px * var(--fl-scale, 1));
+  font-weight: 500;
+  letter-spacing: 0.6px;
+  color: rgba(255,255,255,0.62);
+  max-width: 70%;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
+/* ----- sakura · falling petals ----- */
+/* Pool of N petals with randomized per-element vars (--x, --dur, --sway,
+   --delay, --size, --rot). Each petal: .petal > ::before is the actual
+   petal shape, while the wrapper handles vertical fall and the inner
+   handles horizontal sway — composing two animations cleanly. */
+#sakura {
+  display: none;
+  position: absolute; inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  overflow: hidden;
+}
+body.theme-sakura #sakura { display: block; }
+.petal {
+  position: absolute;
+  top: -20px;
+  left: var(--x, 50%);
+  width:  var(--size, 12px);
+  height: var(--size, 12px);
+  animation: sakura-fall var(--dur, 14s) linear infinite;
+  animation-delay: var(--delay, 0s);
+  will-change: transform;
+}
+.petal::before {
+  content: '';
+  display: block;
+  width: 100%; height: 100%;
+  /* Petal shape: asymmetric oval, tinted to the accent so the field shifts
+     color with the song. No box-shadow — 32 shadowed elements with infinite
+     animations is a noticeable CPU cost on every frame. */
+  background: radial-gradient(ellipse at 30% 30%,
+              rgba(255, 255, 255, 0.95) 0%,
+              var(--accent, #ffb6c1) 60%,
+              rgba(180, 80, 100, 0.9) 100%);
+  border-radius: 100% 0 100% 0;
+  transform: rotate(var(--rot, 0deg));
+  animation: sakura-sway var(--sway, 4s) ease-in-out infinite;
+  animation-delay: var(--delay, 0s);
+  opacity: 0.92;
+}
+@keyframes sakura-fall {
+  /* Vertical journey from above the canvas to below, with a slow rotation
+     so the petal "tumbles" as it falls. */
+  from { transform: translateY(-10vh) rotate(0deg); }
+  to   { transform: translateY(120vh) rotate(540deg); }
+}
+@keyframes sakura-sway {
+  /* Horizontal wobble so falls aren't dead-straight. */
+  0%, 100% { margin-left: -16px; }
+  50%      { margin-left:  16px; }
+}
+
+/* ----- storm · heavy rain + lightning ----- */
+/* Lightning is a single full-canvas div that gets .flash added on hard onsets
+   (see flashLightning in app.js). The flash animation is short (~280ms) and
+   uses opacity rather than display so the GPU can transition smoothly. */
+#lightning {
+  display: none;
+  position: absolute; inset: 0;
+  z-index: 4;
+  pointer-events: none;
+  background: linear-gradient(180deg,
+              rgba(220, 230, 255, 0.55) 0%,
+              rgba(200, 220, 255, 0.18) 60%,
+              transparent 100%);
+  opacity: 0;
+}
+body.theme-storm #lightning { display: block; }
+#lightning.flash {
+  animation: lightning-flash 280ms ease-out forwards;
+}
+@keyframes lightning-flash {
+  /* Two-stroke flash — the classic "flash, dim, flash again" lightning feel. */
+  0%   { opacity: 0;    }
+  10%  { opacity: 0.95; }
+  30%  { opacity: 0.25; }
+  45%  { opacity: 0.85; }
+  100% { opacity: 0;    }
+}
+/* Rain animation: only the two repeating-linear-gradient layers slide; the
+   solid darkening layer underneath stays fixed. Larger drift than piano's
+   rain to read as "harder downpour". */
+@keyframes storm-rain {
+  0%   { background-position: 0 0, 0 0,         0 0; }
+  100% { background-position: 0 0, -90px 320px, -54px 220px; }
+}
+/* Storm body chrome: heavier rain than piano, darker base. */
+body.theme-storm {
+  --radius: 14px;
+}
+
+/* ----- conversation · shared bubble stream (imsg + duet) ----- */
+/* The container fills the canvas top-to-bottom; stream is justify-end so new
+   messages anchor at the bottom and older ones drift up. JS prunes leading
+   children to keep at most CV_MAX bubbles in the DOM. */
+#convo {
+  display: none;
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  flex-direction: column;
+  padding: 38px 14px 16px;
+  font-family: var(--fl-text-font, inherit);
+  pointer-events: none;
+  overflow: hidden;
+}
+#convo .cv-header {
+  display: flex; align-items: center; gap: 10px;
+  flex-shrink: 0;
+  padding: 0 4px 10px;
+  border-bottom: 0.5px solid var(--fl-chrome-border, rgba(255,255,255,0.08));
+  margin-bottom: 8px;
+}
+#convo .cv-avatar {
+  width: calc(28px * var(--fl-scale, 1));
+  height: calc(28px * var(--fl-scale, 1));
+  border-radius: 999px;
+  background: linear-gradient(135deg, var(--accent), var(--accent-soft));
+  flex-shrink: 0;
+}
+#convo .cv-meta { flex: 1; min-width: 0; }
+#convo .cv-name {
+  font-size: calc(11.5px * var(--fl-scale, 1));
+  font-weight: 600;
+  color: var(--fl-chrome-fg, #f4f0e8);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+#convo .cv-status {
+  font-size: calc(9.5px * var(--fl-scale, 1));
+  color: var(--fl-chrome-artist, rgba(255,255,255,0.5));
+  display: flex; align-items: center; gap: 5px;
+}
+#convo .cv-dot {
+  width: 5px; height: 5px; border-radius: 999px;
+  background: #4adc6c;
+  display: inline-block;
+}
+#convo .cv-stream {
+  flex: 1;
+  display: flex; flex-direction: column; justify-content: flex-end;
+  gap: 5px;
+  overflow: hidden;
+  min-height: 0;
+}
+.cv-bubble {
+  --bg: rgba(255,255,255,0.07);
+  --fg: rgba(255,255,255,0.7);
+  align-self: flex-start;
+  max-width: 85%;
+  padding: calc(7px * var(--fl-scale, 1)) calc(11px * var(--fl-scale, 1));
+  border-radius: 14px 14px 14px 4px;
+  background: var(--bg);
+  color: var(--fg);
+  font-size: calc(var(--fl-text-size, 14px) * var(--fl-scale, 1) * var(--fl-text-scale-bias, 1));
+  font-weight: var(--fl-text-weight, 500);
+  line-height: 1.35;
+  letter-spacing: var(--fl-letter-spacing, 0.2px);
+  word-break: break-word;
+  text-shadow: var(--fl-text-shadow, none);
+  transform: translateY(0);
+  opacity: 1;
+  transition: opacity 240ms cubic-bezier(.2,.8,.3,1),
+              transform 240ms cubic-bezier(.2,.8,.3,1),
+              background 360ms ease, color 360ms ease,
+              box-shadow 360ms ease;
+  will-change: transform, opacity;
+}
+.cv-bubble.fresh {
+  opacity: 0;
+  transform: translateY(12px) scale(0.96);
+}
+.cv-bubble.now {
+  --bg: linear-gradient(135deg, var(--accent), var(--accent-soft));
+  --fg: #fff;
+  font-weight: 600;
+  box-shadow: 0 2px 14px var(--accent-glow);
+}
+/* Typing-dot indicator. Hidden by default; .show fades it in during the
+   gap between two LRC lines. Same shape on both sides for now. */
+#convo .cv-typing {
+  align-self: flex-start;
+  display: flex; gap: 4px;
+  padding: 9px 13px;
+  border-radius: 14px 14px 14px 4px;
+  background: rgba(255,255,255,0.08);
+  width: fit-content;
+  margin-top: 4px;
+  opacity: 0;
+  transform: translateY(4px);
+  transition: opacity 200ms ease, transform 200ms ease;
+  flex-shrink: 0;
+}
+#convo .cv-typing.show { opacity: 1; transform: translateY(0); }
+#convo .cv-typing[data-side="R"] {
+  align-self: flex-end;
+  border-radius: 14px 14px 4px 14px;
+}
+#convo .cv-typing i {
+  width: 6px; height: 6px; border-radius: 999px;
+  background: rgba(255,255,255,0.6);
+  animation: cv-dot 1.2s ease-in-out infinite;
+}
+#convo .cv-typing i:nth-child(2) { animation-delay: 0.15s; }
+#convo .cv-typing i:nth-child(3) { animation-delay: 0.30s; }
+@keyframes cv-dot {
+  0%, 60%, 100% { transform: translateY(0);    opacity: 0.4; }
+  30%           { transform: translateY(-3px); opacity: 1;   }
+}
+
+/* ----- imsg · iMessage refresh ----- */
+/* Single-voice chat. All bubbles left-aligned; current bubble in accent
+   gradient with a soft glow; older bubbles muted. */
+body.theme-imsg .cv-bubble { align-self: flex-start; border-radius: 14px 14px 14px 4px; }
+body.theme-imsg .cv-bubble.past { opacity: 0.78; }
+/* Single-voice: typing dots are always the singer's, so they live on the
+   left. Override the data-side="R" right-alignment that duet uses. */
+body.theme-imsg #convo .cv-typing,
+body.theme-imsg #convo .cv-typing[data-side="R"] {
+  align-self: flex-start;
+  border-radius: 14px 14px 14px 4px;
+}
+
+/* ----- duet · two voices, alternating sides + complementary colors ----- */
+/* Side L (even line index) speaks in accent; side R speaks in accent-comp.
+   Past bubbles keep their side color faintly so the visual rhythm of the
+   conversation stays legible as you scroll up. */
+/* Push the name/status block past the second (overlapping) avatar so it
+   doesn't get covered. The pseudo-element extends ~60% of the avatar width
+   to the right; reserve that space here. */
+body.theme-duet #convo .cv-avatar { margin-right: calc(18px * var(--fl-scale, 1)); }
+body.theme-duet .cv-bubble[data-side="L"] {
+  align-self: flex-start;
+  border-radius: 14px 14px 14px 4px;
+}
+body.theme-duet .cv-bubble[data-side="R"] {
+  align-self: flex-end;
+  border-radius: 14px 14px 4px 14px;
+}
+body.theme-duet .cv-bubble.now[data-side="L"] {
+  --bg: linear-gradient(135deg, var(--accent), var(--accent-soft));
+  box-shadow: 0 2px 12px var(--accent-glow);
+}
+body.theme-duet .cv-bubble.now[data-side="R"] {
+  --bg: linear-gradient(135deg, var(--accent-comp), var(--accent-comp-soft));
+  box-shadow: 0 2px 12px var(--accent-comp-soft);
+}
+body.theme-duet .cv-bubble.past[data-side="L"] {
+  --bg: hsl(from var(--accent) h s l / 0.18);
+  --fg: rgba(255,255,255,0.78);
+}
+body.theme-duet .cv-bubble.past[data-side="R"] {
+  --bg: hsl(from var(--accent-comp) h s l / 0.18);
+  --fg: rgba(255,255,255,0.78);
+}
+/* Two-avatar header: clone the avatar visually via ::after, offset for the
+   classic group-chat overlap. */
+body.theme-duet #convo .cv-avatar {
+  position: relative;
+}
+body.theme-duet #convo .cv-avatar::after {
+  content: '';
+  position: absolute;
+  left: 60%; top: 0;
+  width: 100%; height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(135deg, var(--accent-comp), var(--accent-comp-soft));
+  border: 1.5px solid var(--fl-bg-color, #14101a);
+}
+/* ----- subtitle · transparent desktop lyric strip ----- */
+body.theme-subtitle {
+  --radius: 12px;
+  box-shadow: none;
+}
+body.theme-subtitle #lyrics {
+  justify-content: flex-end;
+  align-items: center;
+  padding: 0 28px 18px;
+  text-align: center;
+}
+body.theme-subtitle .line.curr {
+  width: auto;
+  max-width: min(92%, 30ch);
+  padding: 7px 18px 9px;
+  border-radius: 10px;
+  background:
+    linear-gradient(180deg, rgba(0,0,0,0.34), rgba(0,0,0,0.48)),
+    radial-gradient(ellipse 90% 100% at 50% 0%, rgba(255,255,255,0.12), transparent 70%);
+  border: 0.5px solid rgba(255,255,255,0.14);
+  backdrop-filter: blur(12px) saturate(1.25);
+  -webkit-backdrop-filter: blur(12px) saturate(1.25);
+}
+body.theme-subtitle .line.curr.changing {
+  opacity: 0;
+  filter: blur(8px);
+  transform: translateY(7px) scale(0.98);
+  letter-spacing: 0;
+}
+body.theme-subtitle #topbar {
+  top: calc(8px * min(var(--fl-scale), 1.8));
+}
