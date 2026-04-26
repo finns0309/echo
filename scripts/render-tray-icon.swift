@@ -1,37 +1,35 @@
-// One-shot: render an SF Symbol to a square template PNG sized for the macOS
-// menu bar.
+// One-shot: draw echo's tray mark to a template PNG.
 //
-//   swift scripts/render-tray-icon.swift assets/tray-Template.png [symbol] [glyphPt]
+//   swift scripts/render-tray-icon.swift assets/tray-Template.png
 //
-// Per Apple HIG for menu bar extras, the image canvas should be 22pt square
-// (@2x = 44px). The glyph inside should be in the 13–16pt range with ~3pt
-// padding so it sits visually like a peer to system items (Bluetooth / Wi-Fi /
-// volume). Two pitfalls when targeting `music.note` specifically:
-//   1. Glyphs with a vertical stem render *taller* than horizontally-symmetric
-//      glyphs at the same pointSize — drop the pointSize to compensate.
-//   2. SF Symbols default `weight: .medium` reads heavier than the regular
-//      weight system uses — match `.regular` for visual parity.
+// Why hand-drawn instead of an SF Symbol:
+//
+// SF Symbols look great in NSStatusItem when the OS rasterizes them live (it
+// applies CoreText optical sizing + hinting at display time). When we
+// pre-rasterize via lockFocus / NSGraphicsContext to feed Electron's Tray
+// constructor, we lose all of that — the result reads as "blurry SF Symbol".
+//
+// Pure CG paths drawn at the target pixel grid stay crisp at 22pt because
+// there's no hinting to lose. The mark below is a simple "dot + two
+// concentric arcs" — a broadcasting / radiating metaphor that fits the
+// project name (echo = the sound coming back).
+//
+// Pixel layout, 22pt canvas (@2x = 44px):
+//   anchor  = (7.5, 11)        slightly left of center
+//   dot     = filled circle, r=1.4pt
+//   arc1    = stroked, r=4.5pt, ±55°  (1.6pt round caps)
+//   arc2    = stroked, r=8pt,   ±55°  (1.6pt round caps)
 import AppKit
 
 guard CommandLine.arguments.count >= 2 else {
-    FileHandle.standardError.write("usage: render-tray-icon.swift <output.png> [symbol] [glyphPt]\n".data(using: .utf8)!)
+    FileHandle.standardError.write("usage: render-tray-icon.swift <output.png>\n".data(using: .utf8)!)
     exit(2)
 }
 let outPath = CommandLine.arguments[1]
-let symbolName = CommandLine.arguments.count > 2 ? CommandLine.arguments[2] : "music.note"
-let glyphPt: CGFloat = CommandLine.arguments.count > 3 ? CGFloat(Double(CommandLine.arguments[3]) ?? 11) : 11
 
-// Canvas: 22pt square @ 2x = 44px square. Standard menubar tray slot.
 let canvasPt: CGFloat = 22
-let scale: CGFloat = 2.0
+let scale: CGFloat = 2
 let canvasPx = Int(canvasPt * scale)
-
-guard let base = NSImage(systemSymbolName: symbolName, accessibilityDescription: nil) else {
-    FileHandle.standardError.write("unknown SF Symbol: \(symbolName)\n".data(using: .utf8)!)
-    exit(1)
-}
-let cfg = NSImage.SymbolConfiguration(pointSize: glyphPt, weight: .regular)
-let glyph = base.withSymbolConfiguration(cfg) ?? base
 
 guard let bitmap = NSBitmapImageRep(
     bitmapDataPlanes: nil,
@@ -46,17 +44,36 @@ bitmap.size = NSSize(width: canvasPt, height: canvasPt)
 NSGraphicsContext.saveGraphicsState()
 NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: bitmap)
 
-// Center glyph inside the square canvas. Glyph dimensions come from its
-// configured intrinsic size — for music.note that's ~taller-than-wide, so x
-// padding > y padding.
-let g = glyph.size
-let originX = (canvasPt - g.width)  / 2
-let originY = (canvasPt - g.height) / 2
-NSColor.black.set() // template image: monochrome glyph, OS recolors per dark/light
-glyph.draw(in: NSRect(x: originX, y: originY, width: g.width, height: g.height))
+let ctx = NSGraphicsContext.current!.cgContext
+ctx.setShouldAntialias(true)
+ctx.setAllowsAntialiasing(true)
+
+// Template image: black-on-clear; macOS recolors per dark/light.
+NSColor.black.set()
+
+let cx: CGFloat = 7.5
+let cy: CGFloat = 11
+let stroke: CGFloat = 1.6
+
+// Source dot.
+NSBezierPath(ovalIn: NSRect(x: cx - 1.4, y: cy - 1.4, width: 2.8, height: 2.8)).fill()
+
+// Inner arc.
+let inner = NSBezierPath()
+inner.appendArc(withCenter: NSPoint(x: cx, y: cy), radius: 4.5, startAngle: -55, endAngle: 55)
+inner.lineWidth = stroke
+inner.lineCapStyle = .round
+inner.stroke()
+
+// Outer arc.
+let outer = NSBezierPath()
+outer.appendArc(withCenter: NSPoint(x: cx, y: cy), radius: 8, startAngle: -55, endAngle: 55)
+outer.lineWidth = stroke
+outer.lineCapStyle = .round
+outer.stroke()
 
 NSGraphicsContext.restoreGraphicsState()
 
 guard let data = bitmap.representation(using: .png, properties: [:]) else { exit(1) }
 try data.write(to: URL(fileURLWithPath: outPath))
-print("wrote \(outPath) (\(canvasPx)x\(canvasPx), glyph ≈ \(Int(g.width))x\(Int(g.height))pt)")
+print("wrote \(outPath) (\(canvasPx)x\(canvasPx))")
