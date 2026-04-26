@@ -3,10 +3,14 @@
 //
 //   swift scripts/render-tray-icon.swift assets/tray-Template.png [symbol] [glyphPt]
 //
-// macOS menu bar tray icons want a *square* image at 22pt logical (@2x = 44px),
-// with the glyph itself ~14–16pt and the rest as padding. Feeding a non-square
-// image makes the OS scale-to-fit-height, which is why a vertical glyph like
-// `music.note` came out comically tall on the first pass.
+// Per Apple HIG for menu bar extras, the image canvas should be 22pt square
+// (@2x = 44px). The glyph inside should be in the 13–16pt range with ~3pt
+// padding so it sits visually like a peer to system items (Bluetooth / Wi-Fi /
+// volume). Two pitfalls when targeting `music.note` specifically:
+//   1. Glyphs with a vertical stem render *taller* than horizontally-symmetric
+//      glyphs at the same pointSize — drop the pointSize to compensate.
+//   2. SF Symbols default `weight: .medium` reads heavier than the regular
+//      weight system uses — match `.regular` for visual parity.
 import AppKit
 
 guard CommandLine.arguments.count >= 2 else {
@@ -15,7 +19,7 @@ guard CommandLine.arguments.count >= 2 else {
 }
 let outPath = CommandLine.arguments[1]
 let symbolName = CommandLine.arguments.count > 2 ? CommandLine.arguments[2] : "music.note"
-let glyphPt: CGFloat = CommandLine.arguments.count > 3 ? CGFloat(Double(CommandLine.arguments[3]) ?? 14) : 14
+let glyphPt: CGFloat = CommandLine.arguments.count > 3 ? CGFloat(Double(CommandLine.arguments[3]) ?? 11) : 11
 
 // Canvas: 22pt square @ 2x = 44px square. Standard menubar tray slot.
 let canvasPt: CGFloat = 22
@@ -26,7 +30,7 @@ guard let base = NSImage(systemSymbolName: symbolName, accessibilityDescription:
     FileHandle.standardError.write("unknown SF Symbol: \(symbolName)\n".data(using: .utf8)!)
     exit(1)
 }
-let cfg = NSImage.SymbolConfiguration(pointSize: glyphPt, weight: .medium)
+let cfg = NSImage.SymbolConfiguration(pointSize: glyphPt, weight: .regular)
 let glyph = base.withSymbolConfiguration(cfg) ?? base
 
 guard let bitmap = NSBitmapImageRep(
