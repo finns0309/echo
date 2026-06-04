@@ -2,33 +2,26 @@
 // renderer (apply-theme dispatch).
 //
 // A theme is a composition of components:
-//   layout: 'stage' | 'triplet' | 'single'
-//     - stage:   floating cards at center, one per line. Per-char reveal.
-//     - triplet: prev / curr / next stacked.
-//     - single:  only the current line, huge and centered.
+//   layout: 'stage' | 'single' | 'conversation' | 'danmaku'
+//     - stage:        floating cards at center, one per line. Per-char reveal.
+//     - single:       only the current line, huge and centered.
+//     - conversation: chat-bubble stream (imsg).
+//     - danmaku:      fullscreen right→left barrage.
 //   reveal: 'wave' | 'typewriter' | 'ink' | 'none'
 //     Per-char entrance animation. Only meaningful for layout=stage.
-//   fx:     'plasma' | undefined  (optional GPU shader layer)
-//     Turns on renderer/fx.js: a full-screen WebGL quad painted between
-//     #bg and #tint. Pulled by app.js on theme apply; uniforms get fed
-//     the album's vivid/ambient colors and a beat bump on each line change.
-//   frame:  'full' | 'cover-left'  (default 'full')
-//     'cover-left' reserves the left square of the window for the album
-//     cover and shifts lyrics to the right. No current theme uses it — the
-//     DOM + CSS scaffold is in place for you to add one.
-//   tokens: map of CSS custom properties applied to <body>
-//     See style.css §TOKENS for the full list. Any `--fl-*` you set here
-//     overrides the default in the base layer.
-//   customClass: optional string, adds `theme-<name>` to body for the few
-//     themes that need a bespoke CSS block (typewriter cursor, aura breathing,
-//     minimal left-aligned mask, etc). Most themes don't need this.
+//   fx:     'plasma' | undefined  (optional GPU shader layer, renderer/fx.js)
+//   window: 'headline' | 'subtitle-strip' | 'ambient' | 'overlay' | 'card'
+//     Mode of consumption → window bounds + click-through (resolved in main.js).
+//   tokens: map of CSS custom properties applied to <body> (see style.css §TOKENS).
+//   customClass: optional, adds `theme-<name>` to body for the few themes that
+//     need a bespoke CSS block (typewriter cursor, subtitle strip, etc.).
 //
-// Adding a new theme:
-//   1. Copy an entry below, change name/label, tweak tokens.
-//   2. Done. Most of the time you will not touch style.css.
-//   3. Only if you need something the token layer can't express (a new
-//      animation, pseudo-elements, layout tweaks), add a small
-//      `body.theme-<name>` block to style.css and set customClass: true.
+// Adding a new theme: copy an entry, change name/label, tweak tokens. Only add a
+// `body.theme-<name>` block + customClass: true if tokens can't express it.
+//
+// NOTE: the spectrum/onset engine (renderer/audio.js) is kept as dormant
+// infrastructure — no current theme consumes it. A future audio-reactive theme
+// re-wires its onset handler there; see audio.js.
 
 // IIFE-wrapped so internal names (THEMES, etc.) don't leak to the shared
 // global scope. Plain <script> tags all share one global scope, and app.js
@@ -37,24 +30,6 @@
 (function () {
 
 const THEMES = [
-  // ---------- stage · wave ----------
-  {
-    name: 'wave', label: '波浪', window: 'headline',
-    layout: 'stage', reveal: 'wave',
-    tokens: {
-      '--fl-bg-blur':       '45px',
-      '--fl-bg-saturate':   '1.7',
-      '--fl-bg-brightness': '0.78',
-      '--fl-bg-scale':      '1.45',
-      '--fl-tint-image': `
-        linear-gradient(180deg, rgba(0,0,0,0.12), rgba(0,0,0,0.45)),
-        radial-gradient(ellipse 100% 70% at 50% 40%, var(--accent-glow), transparent 65%)`,
-      '--fl-text-color':   '#fff',
-      '--fl-text-weight':  '700',
-      '--fl-text-shadow':  '0 2px 12px rgba(0,0,0,0.5), 0 0 22px var(--accent-glow)',
-    },
-  },
-
   // ---------- stage · typewriter ----------
   {
     name: 'typewriter', label: '打字机', window: 'headline',
@@ -107,82 +82,28 @@ const THEMES = [
     },
   },
 
-  // ---------- single · aura (NetEase default) ----------
+  // ---------- stage · plasma (WebGL shader flow, domain-warped fbm) ----------
   {
-    name: 'aura', label: '神光', window: 'headline',
-    layout: 'single', reveal: 'none',
-    customClass: true, // curr-line breathing + scale-in-out change
+    name: 'plasma', label: '流体', window: 'ambient',
+    layout: 'stage', reveal: 'wave', fx: 'plasma',
     tokens: {
-      '--fl-bg-blur':       '56px',
-      '--fl-bg-saturate':   '1.9',
-      '--fl-bg-brightness': '0.88',
-      '--fl-bg-scale':      '1.6',
-      '--fl-bg-animation':  'aura-breathe 18s ease-in-out infinite',
+      // Hide the cover layer entirely — the shader is the background.
+      // Bg color matches the shader's BASE_DARK so any uncovered edge (during
+      // resize, or under the vignette) blends instead of revealing black.
+      '--fl-bg-color':     '#1a0e3d',
+      '--fl-bg-image':     'none',
+      '--fl-bg-scale':     '1',
       '--fl-tint-image': `
-        radial-gradient(ellipse 80% 60% at 20% 0%,   rgba(255,220,200,0.14), transparent 55%),
-        radial-gradient(ellipse 90% 70% at 100% 100%, rgba(80,100,160,0.18), transparent 60%),
-        radial-gradient(ellipse 130% 90% at 50% 50%, transparent 30%, rgba(0,0,0,0.38) 82%, rgba(0,0,0,0.58) 100%),
-        linear-gradient(180deg, rgba(0,0,0,0.05), rgba(0,0,0,0.28))`,
-      '--fl-text-size':    '34px',
+        radial-gradient(ellipse 130% 100% at 50% 50%, transparent 50%, rgba(0,0,0,0.45) 100%),
+        repeating-linear-gradient(0deg, rgba(255,255,255,0.015) 0 1px, transparent 1px 3px)`,
+      '--fl-text-color':   '#ffffff',
       '--fl-text-weight':  '700',
+      '--fl-text-size':    '32px',
       '--fl-letter-spacing':'0.4px',
-      '--fl-text-color':   '#fffaf4',
-    },
-  },
-
-  // ---------- stage · folio (Folia-inspired line focus) ----------
-  {
-    name: 'folio', label: '流光页', window: 'wide',
-    layout: 'stage', reveal: 'glint',
-    customClass: true, // hairline grid + stronger current-line glow
-    tokens: {
-      '--fl-bg-blur':       '38px',
-      '--fl-bg-saturate':   '1.45',
-      '--fl-bg-brightness': '0.62',
-      '--fl-bg-scale':      '1.34',
-      '--fl-tint-image': `
-        linear-gradient(180deg, rgba(7,8,12,0.24), rgba(7,8,12,0.58)),
-        radial-gradient(ellipse 70% 50% at 50% 48%, var(--accent-glow), transparent 68%)`,
-      '--fl-text-color':    '#fffdf8',
-      '--fl-text-size':     '32px',
-      '--fl-text-weight':   '800',
-      '--fl-letter-spacing':'0.2px',
       '--fl-text-shadow': `
-        0 2px 14px rgba(0,0,0,0.58),
-        0 0 22px rgba(255,255,255,0.24),
-        0 0 38px var(--accent-glow)`,
-      '--fl-leave-filter':  'blur(16px) saturate(1.4)',
-      '--fl-chrome-bg':     'rgba(8,9,14,0.34)',
-      '--fl-chrome-fg':     'rgba(255,255,255,0.92)',
-      '--fl-chrome-border': 'rgba(255,255,255,0.12)',
-      '--fl-chrome-artist': 'rgba(255,255,255,0.56)',
-    },
-  },
-
-  // ---------- triplet · sleeve (album cover as the left anchor) ----------
-  {
-    name: 'sleeve', label: '封套', window: 'wide',
-    layout: 'triplet', reveal: 'none', frame: 'cover-left',
-    customClass: true, // cover divider + tighter right-side typography
-    tokens: {
-      '--fl-bg-blur':       '34px',
-      '--fl-bg-saturate':   '1.35',
-      '--fl-bg-brightness': '0.58',
-      '--fl-bg-scale':      '1.28',
-      '--fl-tint-image': `
-        linear-gradient(90deg, rgba(8,8,10,0.18), rgba(8,8,10,0.66)),
-        radial-gradient(ellipse 90% 70% at 20% 50%, var(--accent-glow), transparent 66%)`,
-      '--fl-text-size':     '24px',
-      '--fl-text-weight':   '760',
-      '--fl-prev-size':     '12.5px',
-      '--fl-prev-color':    'rgba(255,255,255,0.42)',
-      '--fl-letter-spacing':'0.2px',
-      '--fl-text-shadow':   '0 2px 12px rgba(0,0,0,0.58)',
-      '--fl-chrome-bg':     'rgba(8,8,10,0.38)',
-      '--fl-chrome-fg':     'rgba(255,255,255,0.9)',
-      '--fl-chrome-border': 'rgba(255,255,255,0.12)',
-      '--fl-chrome-artist': 'rgba(255,255,255,0.58)',
-      '--fl-chrome-btn-hover-bg': 'rgba(255,255,255,0.14)',
+        0 2px 12px rgba(0,0,0,0.55),
+        0 0 24px rgba(255,255,255,0.45),
+        0 0 48px var(--accent-glow)`,
     },
   },
 
@@ -210,85 +131,6 @@ const THEMES = [
       '--fl-chrome-fg':     '#fff',
       '--fl-chrome-border': 'rgba(255,255,255,0.12)',
       '--fl-chrome-artist': 'rgba(255,255,255,0.58)',
-    },
-  },
-
-  // ---------- stage · plasma (WebGL shader flow, domain-warped fbm) ----------
-  {
-    name: 'plasma', label: '流体', window: 'ambient',
-    layout: 'stage', reveal: 'wave', fx: 'plasma',
-    tokens: {
-      // Hide the cover layer entirely — the shader is the background.
-      // Bg color matches the shader's BASE_DARK so any uncovered edge (during
-      // resize, or under the vignette) blends instead of revealing black.
-      '--fl-bg-color':     '#1a0e3d',
-      '--fl-bg-image':     'none',
-      '--fl-bg-scale':     '1',
-      '--fl-tint-image': `
-        radial-gradient(ellipse 130% 100% at 50% 50%, transparent 50%, rgba(0,0,0,0.45) 100%),
-        repeating-linear-gradient(0deg, rgba(255,255,255,0.015) 0 1px, transparent 1px 3px)`,
-      '--fl-text-color':   '#ffffff',
-      '--fl-text-weight':  '700',
-      '--fl-text-size':    '32px',
-      '--fl-letter-spacing':'0.4px',
-      '--fl-text-shadow': `
-        0 2px 12px rgba(0,0,0,0.55),
-        0 0 24px rgba(255,255,255,0.45),
-        0 0 48px var(--accent-glow)`,
-    },
-  },
-
-  // ---------- stage · karaoke pop (per-character timing reveal) ----------
-  {
-    name: 'pop', label: '字弹', window: 'headline',
-    layout: 'stage', reveal: 'karaoke',
-    tokens: {
-      '--fl-bg-blur':       '40px',
-      '--fl-bg-saturate':   '1.6',
-      '--fl-bg-brightness': '0.66',
-      '--fl-bg-scale':      '1.4',
-      '--fl-tint-image': `
-        linear-gradient(180deg, rgba(0,0,0,0.18), rgba(0,0,0,0.5)),
-        radial-gradient(ellipse 90% 65% at 50% 50%, var(--accent-glow), transparent 65%)`,
-      '--fl-text-color':    '#fffaf0',
-      '--fl-text-size':     '34px',
-      '--fl-text-weight':   '800',
-      '--fl-letter-spacing':'0.6px',
-      '--fl-text-shadow': `
-        0 2px 14px rgba(0,0,0,0.55),
-        0 0 22px var(--accent-glow)`,
-    },
-  },
-
-  // ---------- single · piano (Deemo-style rainy piano ballad) ----------
-  {
-    name: 'piano', label: '雨夜钢琴', window: 'headline',
-    layout: 'single', reveal: 'none',
-    customClass: true, // needs piano-key strip + rain + serif treatment
-    tokens: {
-      '--fl-bg-saturate':   '0',      // grayscale the cover
-      '--fl-bg-brightness': '0.42',
-      '--fl-bg-blur':       '28px',
-      '--fl-bg-scale':      '1.22',
-      // Layers, top to bottom:
-      //  1) heavy top→bottom vignette (melancholic dimming)
-      //  2) warm sepia wash (faint, to tint grayscale cover toward paper)
-      //  3) diagonal rain hatching, animated by --fl-tint-animation
-      '--fl-tint-image': `
-        linear-gradient(180deg, rgba(15,12,10,0.55), rgba(8,6,5,0.82)),
-        linear-gradient(180deg, rgba(90,60,30,0.06), rgba(60,40,20,0.12)),
-        repeating-linear-gradient(14deg, rgba(255,255,255,0.055) 0 1px, transparent 1px 7px)`,
-      '--fl-tint-animation': 'rain-fall 1.8s linear infinite',
-      '--fl-text-font':     '"Iowan Old Style", "Palatino", "Songti SC", "STSong", serif',
-      '--fl-text-weight':   '500',
-      '--fl-text-size':     '34px',
-      '--fl-letter-spacing':'2px',
-      '--fl-text-color':    '#efe7d8',
-      '--fl-text-shadow':   '0 2px 8px rgba(0,0,0,0.65), 0 0 24px rgba(0,0,0,0.5)',
-      '--fl-chrome-bg':     'rgba(12,10,8,0.48)',
-      '--fl-chrome-fg':     '#efe7d8',
-      '--fl-chrome-border': 'rgba(239,231,216,0.14)',
-      '--fl-chrome-artist': 'rgba(239,231,216,0.55)',
     },
   },
 
@@ -321,109 +163,9 @@ const THEMES = [
     },
   },
 
-  // ---------- stage · ripple (water surface, onset → ring) ----------
-  // Calm pond surface tinted by cover. Each audio onset spawns a circular
-  // wave from a random point that expands and fades. Cheaper than plasma
-  // (no fbm) — ~6 distance calcs per fragment per ripple.
-  {
-    name: 'ripple', label: '水波', window: 'ambient',
-    layout: 'stage', reveal: 'wave', fx: 'ripple',
-    customClass: true, // needed so app.js's onset-driven check can match `theme-ripple`
-    tokens: {
-      // Bg color matches the shader's WATER_DEEP so any uncovered edge blends.
-      '--fl-bg-color':     '#0a0e1c',
-      '--fl-bg-image':     'none',
-      '--fl-tint-image': `
-        linear-gradient(180deg, rgba(8,10,18,0.16), rgba(8,10,18,0.42)),
-        radial-gradient(ellipse 110% 80% at 50% 50%, transparent 50%, rgba(0,0,0,0.35) 100%)`,
-      '--fl-text-color':    '#fafcff',
-      '--fl-text-weight':   '700',
-      '--fl-text-size':     '32px',
-      '--fl-letter-spacing':'0.4px',
-      '--fl-text-shadow': `
-        0 2px 14px rgba(0,0,0,0.55),
-        0 0 22px rgba(180,210,255,0.45)`,
-    },
-  },
-
-  // ---------- stage · sakura (falling petals) ----------
-  // Cover-tinted petals fall + sway across the canvas. Lyrics stay in stage
-  // layout on top — petals are background only. Pure CSS-driven animation,
-  // no GPU/spectrum cost.
-  {
-    name: 'sakura', label: '樱花', window: 'ambient',
-    layout: 'stage', reveal: 'wave',
-    customClass: true,
-    tokens: {
-      // Dusk sky: warm pink-purple top → cool indigo bottom. Brightened from
-      // the previous near-black gradient so the bg actually reads as a sky.
-      '--fl-bg-color':     '#2a1a3a',
-      '--fl-bg-image':     'linear-gradient(180deg, #4a2840 0%, #2e1c3a 45%, #1a1428 100%)',
-      '--fl-bg-blur':      '0px',
-      // Top: hint of warm twilight glow. Bottom: ground-level accent wash so
-      // accent color from cover seeps in subtly. No heavy darkening overlay.
-      '--fl-tint-image': `
-        radial-gradient(ellipse 85% 50% at 50% -10%, rgba(255,180,200,0.18), transparent 70%),
-        radial-gradient(ellipse 80% 55% at 50% 105%, var(--accent-glow), transparent 75%)`,
-      '--fl-text-color':    '#fff5f0',
-      '--fl-text-size':     '32px',
-      '--fl-text-weight':   '700',
-      '--fl-letter-spacing':'0.4px',
-      '--fl-text-shadow':   '0 2px 14px rgba(0,0,0,0.55), 0 0 24px var(--accent-glow)',
-    },
-  },
-
-  // ---------- stage · kinetic (术曲 — ボカロ MV style kinetic typography) -----
-  // Each line appears at a random screen position with random scale, rotation,
-  // and entrance animation — mimicking the dynamic layout of Vocaloid MVs.
-  {
-    name: 'kinetic', label: '术曲', window: 'ambient',
-    layout: 'stage', reveal: 'none',
-    customClass: true,
-    tokens: {
-      '--fl-bg-blur':       '42px',
-      '--fl-bg-saturate':   '1.5',
-      '--fl-bg-brightness': '0.42',
-      '--fl-bg-scale':      '1.45',
-      '--fl-tint-image': `
-        linear-gradient(180deg, rgba(0,0,0,0.10), rgba(0,0,0,0.40)),
-        radial-gradient(ellipse 90% 65% at 50% 50%, var(--accent-glow), transparent 65%)`,
-      '--fl-text-color':    '#fff',
-      '--fl-text-size':     '30px',
-      '--fl-text-weight':   '900',
-      '--fl-letter-spacing':'1px',
-      '--fl-text-shadow': `
-        0 2px 14px rgba(0,0,0,0.6),
-        0 0 28px var(--accent-glow)`,
-    },
-  },
-
-  // ---------- solo · instrumental visualizer / 纯音乐 ----------
-  // The default target for tracks NetEase flagged with pureMusic. No cover,
-  // no lyrics — full-canvas spectrum + onset-driven particles, with the song
-  // title centered. Auto-switch maps trackKind:'instrumental' here by default.
-  {
-    name: 'instrumental', label: '纯音乐', window: 'ambient',
-    layout: 'solo', reveal: 'none',
-    customClass: true,
-    tokens: {
-      '--fl-bg-color':      '#06050c',
-      '--fl-bg-image':      'none',
-      '--fl-tint-image':    'none',
-      '--fl-text-color':    '#fffaf2',
-      '--fl-text-size':     '20px',
-      '--fl-text-weight':   '700',
-      '--fl-letter-spacing':'0.4px',
-      '--fl-chrome-bg':     'rgba(0,0,0,0.42)',
-      '--fl-chrome-fg':     '#fff',
-      '--fl-chrome-border': 'rgba(255,255,255,0.12)',
-      '--fl-chrome-artist': 'rgba(255,255,255,0.58)',
-    },
-  },
-
   // ---------- conversation · iMessage refresh / 短信 ----------
-  // Lyrics as one-sided chat: each line is a new message bubble appended at
-  // the bottom; the singer is the sender, you only read. Gap → typing dots.
+  // Lyrics as one-sided chat: each line is a new message bubble appended at the
+  // bottom; the singer is the sender, you only read. Gap → typing dots.
   {
     name: 'imsg', label: '短信', window: 'card',
     layout: 'conversation', reveal: 'none',
@@ -452,116 +194,6 @@ const THEMES = [
       '--fl-chrome-fg':     '#f4f0e8',
       '--fl-chrome-border': 'rgba(255,255,255,0.08)',
       '--fl-chrome-artist': 'rgba(255,255,255,0.5)',
-    },
-  },
-
-  // ---------- triplet · minimal (Apple Music look) ----------
-  {
-    name: 'minimal', label: 'Apple Music', window: 'wide',
-    layout: 'triplet', reveal: 'none',
-    customClass: true, // left-align + mask fade on prev/next
-    tokens: {
-      '--fl-bg-blur':       '42px',
-      '--fl-bg-saturate':   '1.55',
-      '--fl-bg-brightness': '0.78',
-      '--fl-bg-scale':      '1.38',
-      '--fl-tint-image': `
-        linear-gradient(180deg, rgba(0,0,0,0.18), rgba(0,0,0,0.55)),
-        radial-gradient(ellipse 120% 80% at 50% 50%, transparent 40%, rgba(0,0,0,0.25) 100%)`,
-    },
-  },
-
-  // ======================================================================
-  //  v2 themes (opt-in, additive).
-  // ======================================================================
-
-  // ---------- stage · flip (Solari split-flap / 翻牌) ----------------------
-  // Each character is a train-station split-flap leaf that mechanically flips
-  // (rotateX) into its new glyph on line change. The per-char `--i` stagger
-  // gives the classic cascade-across-the-board feel. Pure CSS (reveal=flip +
-  // a bespoke cabinet/hairline block) — no audio, no network. Monospace +
-  // a mechanical near-black palette so it reads as a physical board.
-  {
-    name: 'flip', label: '翻牌', window: 'headline',
-    layout: 'stage', reveal: 'flip',
-    customClass: true, // split-line hairline + flap cabinet styling
-    tokens: {
-      // Dark "departure board" cabinet. Cover is hidden — the board is the
-      // object, not a window onto the album. Bg color matches the flap face
-      // so any uncovered edge blends with the leaves.
-      '--fl-bg-color':      '#0c0d10',
-      '--fl-bg-image':      'none',
-      '--fl-tint-image': `
-        radial-gradient(ellipse 120% 90% at 50% 50%, transparent 55%, rgba(0,0,0,0.5) 100%),
-        repeating-linear-gradient(0deg, rgba(255,255,255,0.018) 0 1px, transparent 1px 2px)`,
-      '--fl-text-font':     '"SF Mono", "JetBrains Mono", Menlo, Consolas, "Courier New", monospace',
-      '--fl-text-weight':   '700',
-      '--fl-text-size':     '34px',
-      '--fl-letter-spacing':'2px',
-      '--fl-text-transform':'uppercase',
-      '--fl-text-color':    '#f2ede0',
-      '--fl-text-shadow':   '0 1px 0 rgba(0,0,0,0.8)',
-      '--fl-chrome-bg':     'rgba(14,15,18,0.6)',
-      '--fl-chrome-fg':     '#e8e3d6',
-      '--fl-chrome-border': 'rgba(255,255,255,0.1)',
-      '--fl-chrome-artist': 'rgba(232,227,214,0.55)',
-    },
-  },
-
-  // ---------- stage · semantic (kinetic typography / 动态字) ----------------
-  // "The text IS the animation." Words whose meaning implies motion move:
-  // fall/落 drops, forever/永远 stretches its tracking wide, break/碎 jitters,
-  // stressed/content words bump weight. Analysis is a DETERMINISTIC LOCAL
-  // heuristic (keyword→motion dictionary + a stress heuristic in app.js),
-  // cached per songId — NOT an LLM/network call. See app.js analyzeLineSemantic
-  // + the TODO there for swapping in a cached one-time LLM pass later.
-  {
-    name: 'semantic', label: '动态字', window: 'ambient',
-    layout: 'stage', reveal: 'semantic',
-    customClass: true, // word-level motion classes + per-word keyframes
-    tokens: {
-      '--fl-bg-blur':       '46px',
-      '--fl-bg-saturate':   '1.5',
-      '--fl-bg-brightness': '0.4',
-      '--fl-bg-scale':      '1.42',
-      '--fl-tint-image': `
-        linear-gradient(180deg, rgba(0,0,0,0.14), rgba(0,0,0,0.46)),
-        radial-gradient(ellipse 90% 65% at 50% 50%, var(--accent-glow), transparent 66%)`,
-      '--fl-text-color':    '#fff',
-      '--fl-text-size':     '34px',
-      '--fl-text-weight':   '700',
-      '--fl-letter-spacing':'0.4px',
-      '--fl-text-shadow': `
-        0 2px 14px rgba(0,0,0,0.58),
-        0 0 26px var(--accent-glow)`,
-    },
-  },
-
-  // ---------- stage · rain (rain-on-glass shader / 雨打玻璃) -----------------
-  // WebGL fragment shader (fx.js): water droplets run down glass, the
-  // accent-tinted backdrop refracting + smearing through them. Droplet
-  // density / streak length follow RMS when the spectrum channel is online,
-  // else animate on time. Ambient window profile (sit beside it like the
-  // other shader themes; don't click through).
-  {
-    name: 'rain', label: '雨打玻璃', window: 'ambient', fx: 'rain',
-    layout: 'stage', reveal: 'wave',
-    tokens: {
-      // Shader is the background; hide the cover. Bg color matches the
-      // shader's GLASS_DEEP so any uncovered edge blends rather than flashing.
-      '--fl-bg-color':     '#0a0f16',
-      '--fl-bg-image':     'none',
-      '--fl-bg-scale':     '1',
-      '--fl-tint-image': `
-        linear-gradient(180deg, rgba(6,10,16,0.18), rgba(6,10,16,0.5)),
-        radial-gradient(ellipse 120% 90% at 50% 50%, transparent 52%, rgba(0,0,0,0.4) 100%)`,
-      '--fl-text-color':   '#eef4fb',
-      '--fl-text-weight':  '700',
-      '--fl-text-size':    '32px',
-      '--fl-letter-spacing':'0.4px',
-      '--fl-text-shadow': `
-        0 2px 16px rgba(0,0,0,0.6),
-        0 0 24px rgba(170,200,235,0.4)`,
     },
   },
 ];

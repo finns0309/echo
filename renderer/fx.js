@@ -98,223 +98,7 @@ void main() {
   gl_FragColor = vec4(col, 1.0);
 }`;
 
-// Ripple: a calm pond surface tinted by the cover. On every audio onset
-// (driven from app.js → FL_FX.pulseRipple()) a new circular wave is spawned
-// from a random point and expands outward, fading. Up to RIPPLE_SLOTS active
-// at once. No expensive fbm here — just a few ring distance calcs per
-// fragment, so this is much cheaper than plasma.
-const FRAG_RIPPLE = `
-precision highp float;
-uniform vec2  uRes;
-uniform float uTime;
-uniform vec3  uAccent;
-// Each ripple = (cx_uv, cy_uv, age_seconds). age < 0 means slot is empty.
-uniform vec3  uRipples[6];
-
-// Brightened from the original near-black so the water surface is *visible*
-// when no ripples are active. Previous values produced an essentially black
-// canvas indistinguishable from #bg leakage.
-const vec3 WATER_DEEP    = vec3(0.06, 0.12, 0.22);
-const vec3 WATER_SURFACE = vec3(0.18, 0.32, 0.55);
-const vec3 RIPPLE_HI     = vec3(0.85, 0.95, 1.00); // crest highlight
-
-void main() {
-  vec2 uv = gl_FragCoord.xy / uRes;
-  float aspect = uRes.x / uRes.y;
-  // Stronger base shimmer + 2 layered traveling waves so the water has
-  // continuous motion even with no ripples active. Reads as "calm water with
-  // a breeze" rather than "dead surface".
-  float shimmer1 = sin(uv.y * 14.0 + uTime * 0.6) * sin(uv.x *  9.0 - uTime * 0.4);
-  float shimmer2 = sin(uv.y *  7.0 - uTime * 0.3) * sin(uv.x * 12.0 + uTime * 0.5);
-  float shimmer = (shimmer1 + shimmer2 * 0.7) * 0.10;
-  vec3 base = mix(WATER_DEEP, WATER_SURFACE, 0.45 + shimmer);
-  // Pull base toward accent color so albums tint the water.
-  base = mix(base, uAccent, 0.22);
-
-  // Sum contributions from active ripples.
-  float wave = 0.0;
-  for (int i = 0; i < 6; i++) {
-    vec3 r = uRipples[i];
-    if (r.z < 0.0) continue;
-    // Aspect-correct distance so ripples are circular, not ellipses.
-    vec2 d = uv - r.xy;
-    d.x *= aspect;
-    float dist = length(d);
-    // Front of the ring expands at fixed speed; thin gaussian profile.
-    float front = r.z * 0.32;
-    float dx = dist - front;
-    float ring = exp(-dx * dx * 380.0);
-    // Fade with age so ripples die out before piling up.
-    float fade = exp(-r.z * 0.55);
-    wave += ring * fade;
-  }
-  wave = clamp(wave, 0.0, 1.0);
-
-  vec3 col = mix(base, RIPPLE_HI, wave * 0.7);
-  // Tiny secondary glow inside the ring for richness.
-  col += uAccent * wave * 0.18;
-
-  vec2 c = uv - 0.5; c.x *= aspect;
-  col *= 1.0 - dot(c, c) * 0.45;
-  gl_FragColor = vec4(col, 1.0);
-}`;
-
-// Rain-on-glass: water running down a foggy pane, the accent-tinted backdrop
-// refracting + smearing through the droplets. DESIGN_DIRECTIONS §2 ("piano
-// theme's shader-grade sibling"). No texture input — the "backdrop" is a
-// procedural accent field, and droplets distort it by perturbing the sample
-// UV plus adding a lens highlight. Droplet density + streak speed/length scale
-// with uRms when the spectrum channel is live (app.js feeds it), else the
-// shader animates on uTime alone (uRms stays at a small idle floor).
-//
-// Performance: the static droplet layer samples a single hash cell (no 3×3
-// neighbourhood), and the runners loop a fixed RUNNERS count. Combined with the
-// half-res canvas in resize() this stays in the same cost class as ripple.
-const FRAG_RAIN = `
-precision highp float;
-uniform vec2  uRes;
-uniform float uTime;
-uniform vec3  uAccent;
-uniform float uRms;   // 0..~0.6 loudness; drives droplet density + streak speed
-
-const vec3 GLASS_DEEP = vec3(0.04, 0.07, 0.11); // matches --fl-bg-color edge
-const vec3 GLASS_LIT  = vec3(0.16, 0.22, 0.30);
-const int  RUNNERS = 8;
-
-float hash21(vec2 p) {
-  vec3 p3 = fract(vec3(p.xyx) * 0.1031);
-  p3 += dot(p3, p3.yzx + 33.33);
-  return fract((p3.x + p3.y) * p3.z);
-}
-vec2 hash22(vec2 p) {
-  vec3 p3 = fract(vec3(p.xyx) * vec3(0.1031, 0.1030, 0.0973));
-  p3 += dot(p3, p3.yzx + 33.33);
-  return fract((p3.xx + p3.yz) * p3.zy);
-}
-
-// Procedural accent-tinted backdrop. This is what the droplets refract: a
-// vertical glass gradient + two slow accent blobs + a faint shimmer.
-vec3 backdrop(vec2 uv) {
-  vec3 col = mix(GLASS_DEEP, GLASS_LIT, uv.y);
-  // Two drifting soft accent pools so the pane isn't flat — like coloured
-  // light behind frosted glass.
-  vec2 b1 = vec2(0.32 + 0.06 * sin(uTime * 0.18), 0.62 + 0.05 * cos(uTime * 0.21));
-  vec2 b2 = vec2(0.74 + 0.05 * cos(uTime * 0.15), 0.30 + 0.06 * sin(uTime * 0.13));
-  float g1 = exp(-dot(uv - b1, uv - b1) * 6.0);
-  float g2 = exp(-dot(uv - b2, uv - b2) * 7.5);
-  col += uAccent * (g1 * 0.5 + g2 * 0.38);
-  // Faint horizontal shimmer for life.
-  col += 0.015 * sin(uv.y * 60.0 + uTime * 0.6);
-  return col;
-}
-
-void main() {
-  vec2 uv = gl_FragCoord.xy / uRes;
-  float aspect = uRes.x / uRes.y;
-
-  // Loudness → activity. Idle floor keeps a gentle drizzle when muse is absent.
-  float act = clamp(0.28 + uRms * 1.7, 0.28, 1.0);
-
-  // Refraction offset accumulator (perturbs the backdrop sample) + a highlight
-  // accumulator (specular glints on droplet crests) + a "clear" accumulator
-  // (where water has wiped the fog away, the glass reads sharper/brighter).
-  vec2  refr  = vec2(0.0);
-  float spec  = 0.0;
-  float clear = 0.0;
-
-  // ---- Static droplet layer: a hashed grid of small clinging drops. Denser
-  // when loud. Each cell holds at most one drop at a jittered position.
-  float cells = mix(9.0, 15.0, act);
-  vec2 gv = vec2(uv.x * aspect, uv.y) * cells;
-  vec2 cid = floor(gv);
-  vec2 cf  = fract(gv);
-  vec2 rnd = hash22(cid);
-  // Drop present in this cell only if its hash clears a density gate.
-  float present = step(1.0 - (0.35 + act * 0.4), hash21(cid + 3.1));
-  vec2 dpos = vec2(0.5) + (rnd - 0.5) * 0.6;
-  float dr  = length(cf - dpos);
-  float drop = present * smoothstep(0.34, 0.05, dr);
-  refr  += (cf - dpos) * drop * 0.9;
-  spec  += pow(smoothstep(0.3, 0.0, dr) * present, 2.5) * 0.6;
-  clear += drop * 0.6;
-
-  // ---- Runners: a fixed set of columns where a larger drop falls, advancing
-  // down the pane (faster when loud) and dragging a thin clearing trail behind.
-  for (int i = 0; i < RUNNERS; i++) {
-    float fi = float(i);
-    float colx = fract(hash21(vec2(fi, 7.0)) + 0.07 * fi);   // column position
-    float speed = (0.12 + hash21(vec2(fi, 3.0)) * 0.22) * (0.6 + act * 1.4);
-    float phase = hash21(vec2(fi, 11.0));
-    // Head y travels 1→0 (top to bottom) and wraps; wobble adds organic sway.
-    float yhead = fract(phase - uTime * speed);
-    float headY = 1.0 - yhead;
-    float wob = 0.012 * sin(uTime * 1.3 + fi * 2.0 + uv.y * 8.0);
-    float dx = (uv.x - colx - wob) * aspect;
-    float colW = 0.010 + hash21(vec2(fi, 5.0)) * 0.012;
-    float lane = smoothstep(colW, 0.0, abs(dx));
-    // Head droplet (a fat lens) + trail above the head (fading clearing band).
-    float dyHead = uv.y - headY;
-    float head = lane * smoothstep(0.05, 0.0, abs(dyHead));
-    float trail = lane * smoothstep(0.0, 0.45, headY - uv.y) * step(uv.y, headY);
-    refr.y += head * 1.6 + trail * 0.25;
-    refr.x += dx * 0.3 * head;
-    spec   += pow(head, 2.0) * 0.7;
-    clear  += head * 0.8 + trail * 0.35;
-  }
-
-  // Sample the backdrop through the accumulated refraction. Droplets act as
-  // little lenses: where they sit, the backdrop is displaced + magnified.
-  vec2 suv = uv + refr * vec2(0.06 / aspect, 0.06);
-  vec3 col = backdrop(suv);
-
-  // Fog: the bare glass is hazed (lifted toward a flat grey-blue); water clears
-  // it back to the sharp, slightly brighter backdrop. So drops + trails read as
-  // "wiped" streaks on a misted pane.
-  vec3 fog = mix(GLASS_DEEP, GLASS_LIT, 0.5) + uAccent * 0.06;
-  float haze = clamp(0.55 - clear, 0.0, 0.55);
-  col = mix(col, fog, haze);
-
-  // Specular glints on droplet crests — a cool white rim that sells the wet
-  // 3D bead. Tinted very slightly by accent so it belongs to the scene.
-  col += (vec3(0.85, 0.92, 1.0) * 0.7 + uAccent * 0.3) * clamp(spec, 0.0, 1.0);
-
-  // Vignette to seat the pane in the window.
-  vec2 c = uv - 0.5; c.x *= aspect;
-  col *= 1.0 - dot(c, c) * 0.45;
-  gl_FragColor = vec4(col, 1.0);
-}`;
-
-const SHADERS = { plasma: FRAG_PLASMA, ripple: FRAG_RIPPLE, rain: FRAG_RAIN };
-
-// Ripple state. Up to RIPPLE_SLOTS active at once — older ones get evicted.
-const RIPPLE_SLOTS = 6;
-const ripples = new Array(RIPPLE_SLOTS).fill(null).map(() => ({ x: 0, y: 0, age: -1 }));
-let ripplesFlat = new Float32Array(RIPPLE_SLOTS * 3);
-function spawnRipple() {
-  // Find oldest (or empty) slot to overwrite.
-  let oldest = 0;
-  for (let i = 1; i < RIPPLE_SLOTS; i++) {
-    if (ripples[i].age < 0) { oldest = i; break; }
-    if (ripples[i].age > ripples[oldest].age) oldest = i;
-  }
-  ripples[oldest].x = 0.15 + Math.random() * 0.7;
-  ripples[oldest].y = 0.15 + Math.random() * 0.7;
-  ripples[oldest].age = 0;
-}
-function pulseRipple(/* velocity */) {
-  if (active !== 'ripple') return;
-  spawnRipple();
-}
-// Ambient ripple cadence: every ~3 seconds drop a small ripple even without
-// a hard onset, so the pond reads as "alive" instead of "frozen waiting for
-// audio". Disabled while onset-driven ripples are active recently.
-let lastAmbientRippleAt = 0;
-function maybeAmbientRipple(now) {
-  if (active !== 'ripple') return;
-  if (now - lastAmbientRippleAt < 2500 + Math.random() * 1500) return;
-  lastAmbientRippleAt = now;
-  spawnRipple();
-}
+const SHADERS = { plasma: FRAG_PLASMA };
 
 // ────────────────────────────────────────────────────────────────
 let canvas = null;
@@ -402,21 +186,6 @@ function loop(now) {
   gl.uniform1f(uLoc.uBeat, beat);
   gl.uniform2f(uLoc.uRes, canvas.width, canvas.height);
   gl.uniform3f(uLoc.uAccent, accent[0], accent[1], accent[2]);
-  // Advance + pack ripple state when ripple shader is active.
-  if (active === 'ripple' && uLoc.uRipples) {
-    maybeAmbientRipple(now);
-    for (let i = 0; i < RIPPLE_SLOTS; i++) {
-      const r = ripples[i];
-      if (r.age >= 0) {
-        r.age += dt;
-        if (r.age > 7) r.age = -1; // expired
-      }
-      ripplesFlat[i * 3]     = r.x;
-      ripplesFlat[i * 3 + 1] = r.y;
-      ripplesFlat[i * 3 + 2] = r.age;
-    }
-    gl.uniform3fv(uLoc.uRipples, ripplesFlat);
-  }
   gl.drawArrays(gl.TRIANGLES, 0, 6);
 }
 
@@ -456,7 +225,6 @@ function start(name) {
     uRes:     gl.getUniformLocation(prog, 'uRes'),
     uBeat:    gl.getUniformLocation(prog, 'uBeat'),
     uAccent:  gl.getUniformLocation(prog, 'uAccent'),
-    uRipples: gl.getUniformLocation(prog, 'uRipples'),
   };
 
   canvas.style.display = 'block';
@@ -499,6 +267,6 @@ function setColors(vivid /* avg ignored */) {
 
 function pulse() { beat = Math.min(1.0, beat + 0.65); }
 
-window.FL_FX = { start, stop, setColors, pulse, pulseRipple };
+window.FL_FX = { start, stop, setColors, pulse };
 
 })();

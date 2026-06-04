@@ -96,9 +96,10 @@ function usesStage() { return document.body.dataset.layout === 'stage'; }
 // growing blur so multiple ghosts overlap at once (like NetEase Aura).
 const STAGE_LEAVE_MS = 2200;
 
-// Accepts a string (legacy) or a line object {text, chars}. When chars[] is
-// present each .wi gets data-t/data-d so the karaoke reveal can class-flip
-// per real timing rather than relying on uniform stagger delays.
+// Stage-layout render: each line becomes one .stage-card of per-codepoint
+// .w > .wi spans. --i drives the reveal stagger (wave/typewriter/ink); the
+// float vars drive the idle w-float micro-drift. Old cards keep floating up
+// with growing blur until the JS removal window fires.
 function renderStage(input) {
   const live = stageEl.querySelectorAll('.stage-card:not(.leaving)');
   live.forEach((c) => {
@@ -107,46 +108,12 @@ function renderStage(input) {
   });
   while (stageEl.children.length > 4) stageEl.firstElementChild.remove();
 
-  const isLine = input && typeof input === 'object';
-  const text   = isLine ? (input.text || '♪') : (input || '♪');
-  const chars  = isLine && input.chars && input.chars.length ? input.chars : null;
+  const text = (input && typeof input === 'object') ? (input.text || '♪') : (input || '♪');
 
   const card = document.createElement('div');
   card.className = 'stage-card';
 
-  // Semantic / kinetic-typography reveal: render WORD groups (not chars) so a
-  // word can move as a unit, each tagged with a deterministic motion. The
-  // analysis is cached per song (see analyzeLineSemantic). We branch here
-  // rather than reuse the per-char token path because motion is word-level.
-  if (document.body.dataset.reveal === 'semantic') {
-    const segs = FL_SEMANTIC.analyzeLine(text, state.songId);
-    segs.forEach((seg, i) => {
-      const w = document.createElement('span');
-      w.className = 'w';
-      const wi = document.createElement('span');
-      wi.className = 'wi';
-      wi.style.setProperty('--i', i);
-      // Stable per-word jitter seed (deterministic-ish from index) so shake/fly
-      // motions differ between adjacent words without re-randomizing each frame.
-      wi.style.setProperty('--seed', ((i * 47) % 100) / 100);
-      if (seg.motion) wi.dataset.motion = seg.motion;
-      // Keep the trailing space attached (non-breaking) so words don't run
-      // together; CJK segments carry no space.
-      wi.textContent = seg.text + (seg.space ? ' ' : '');
-      w.appendChild(wi);
-      card.appendChild(w);
-    });
-    stageEl.appendChild(card);
-    return;
-  }
-
-  // Tokens come from karaoke chars[] when present (yrc tokens may span
-  // multiple letters per syllable); otherwise we split on codepoints.
-  const tokens = chars
-    ? chars.map((c) => ({ text: c.text, time: c.time, duration: c.duration }))
-    : [...text].map((c) => ({ text: c, time: null, duration: null }));
-
-  tokens.forEach((tok, i) => {
+  [...text].forEach((ch, i) => {
     const w = document.createElement('span');
     w.className = 'w';
     w.style.setProperty('--fd',     (3.8 + Math.random() * 3.5).toFixed(2) + 's');
@@ -155,110 +122,13 @@ function renderStage(input) {
     const wi = document.createElement('span');
     wi.className = 'wi';
     wi.style.setProperty('--i', i);
-    // Random per-token "personality" — used by the karaoke reveal to throw
-    // each token out at a unique angle/offset so the popping looks organic.
-    wi.style.setProperty('--rot', ((Math.random() - 0.5) * 36).toFixed(1) + 'deg');
-    wi.style.setProperty('--dx',  ((Math.random() - 0.5) * 0.6).toFixed(2) + 'em');
-    if (tok.time !== null) {
-      wi.dataset.t = tok.time.toFixed(3);
-      wi.dataset.d = (tok.duration ?? 0.2).toFixed(3);
-    }
-    // Replace every space with U+00A0 (non-breaking) so they survive HTML
-    // whitespace collapsing between adjacent inline-block tokens. yrc tokens
-    // for English songs typically embed trailing spaces ("Every ", "day ");
-    // without this swap those spaces vanish and words run together.
-    wi.textContent = tok.text.replace(/ /g, ' ');
+    // U+00A0 so a lone space survives HTML whitespace-collapse between the
+    // inline-block tokens (otherwise adjacent words would run together).
+    wi.textContent = ch === ' ' ? ' ' : ch;
     w.appendChild(wi);
     card.appendChild(w);
   });
-  if (document.body.classList.contains('theme-kinetic')) stampKinetic(card, text);
   stageEl.appendChild(card);
-}
-
-// ─── Kinetic · MV-style random positioning ────────────────────────────────
-// Stamp per-card CSS vars that the bespoke CSS block reads for position,
-// scale, rotation, and entrance variant. Consecutive lines avoid the same
-// screen region so they don't overlap.
-let kineticLastRegion = -1;
-const KINETIC_ENTERS = ['slide-left', 'slide-right', 'slide-up', 'zoom-in', 'zoom-out', 'drop'];
-
-function stampKinetic(card, text) {
-  // divide screen into a 3×3 grid (9 regions); pick one that isn't the last used
-  let region;
-  do { region = Math.floor(Math.random() * 9); } while (region === kineticLastRegion);
-  kineticLastRegion = region;
-
-  const col = region % 3;         // 0=left, 1=center, 2=right
-  const row = Math.floor(region / 3); // 0=top, 1=mid, 2=bottom
-
-  // map grid cell to percentage positions (with jitter)
-  const xBase = [12, 50, 88][col];
-  const yBase = [18, 50, 82][row];
-  const x = xBase + (Math.random() - 0.5) * 14;
-  const y = yBase + (Math.random() - 0.5) * 10;
-
-  // scale: shorter lines can be bigger, long lines stay smaller
-  const len = [...text].length;
-  const scaleBias = len <= 6 ? 1.6 : len <= 12 ? 1.15 : len <= 20 ? 0.85 : 0.65;
-  const scale = scaleBias * (0.9 + Math.random() * 0.25);
-
-  // rotation: small random tilt
-  const rot = (Math.random() - 0.5) * 12;
-
-  // text-align based on horizontal position
-  const align = col === 0 ? 'left' : col === 2 ? 'right' : 'center';
-
-  // entrance animation variant
-  const enter = KINETIC_ENTERS[Math.floor(Math.random() * KINETIC_ENTERS.length)];
-
-  card.style.setProperty('--kx', x.toFixed(1) + '%');
-  card.style.setProperty('--ky', y.toFixed(1) + '%');
-  card.style.setProperty('--kscale', scale.toFixed(2));
-  card.style.setProperty('--krot', rot.toFixed(1) + 'deg');
-  card.style.setProperty('--kalign', align);
-  card.dataset.kenter = enter;
-}
-
-// ─── Sakura · falling petals ───────────────────────────────────────────────
-// One DOM element per petal, animated by a CSS keyframe. We build a pool once
-// (idempotent — re-applying the theme doesn't double up) and let CSS drive
-// the rest. Petals sway via combined translate + rotate animations.
-const SAKURA_COUNT = 32;
-function buildSakuraPool() {
-  const root = document.getElementById('sakura');
-  if (!root || root.dataset.built) return;
-  root.dataset.built = '1';
-  for (let i = 0; i < SAKURA_COUNT; i++) {
-    const p = document.createElement('div');
-    p.className = 'petal';
-    // Random per-petal style: x position, fall duration, sway period, size,
-    // delay so the field looks "in motion" from frame 1 instead of all
-    // launching together.
-    p.style.setProperty('--x',     (Math.random() * 100).toFixed(2) + '%');
-    p.style.setProperty('--dur',   (10 + Math.random() * 10).toFixed(2) + 's');
-    p.style.setProperty('--sway',  (3 + Math.random() * 3).toFixed(2) + 's');
-    p.style.setProperty('--delay', (-Math.random() * 12).toFixed(2) + 's');
-    p.style.setProperty('--size',  (8 + Math.random() * 8).toFixed(1) + 'px');
-    p.style.setProperty('--rot',   ((Math.random() - 0.5) * 360).toFixed(0) + 'deg');
-    root.appendChild(p);
-  }
-}
-
-// Per-frame karaoke trigger. Walks the live stage card and flips .now on
-// each token whose start time has passed. Class-driven so CSS can run a
-// keyframe animation per token at its real moment.
-function applyKaraoke(t) {
-  if (document.body.dataset.reveal !== 'karaoke') return;
-  const card = stageEl.querySelector('.stage-card:not(.leaving)');
-  if (!card) return;
-  const wis = card.querySelectorAll('.wi');
-  for (const wi of wis) {
-    const charT = parseFloat(wi.dataset.t);
-    if (Number.isNaN(charT)) continue;
-    const active = t >= charT;
-    if (active && !wi.classList.contains('now')) wi.classList.add('now');
-    else if (!active && wi.classList.contains('now')) wi.classList.remove('now');
-  }
 }
 
 function renderAt(t) {
@@ -267,7 +137,6 @@ function renderAt(t) {
   if (i === state.lastIdx) return;
   state.lastIdx = i;
   window.FL_FX?.pulse();
-  FL_AUDIO.pulseLine();
 
   const cur = i >= 0 ? state.lines[i] : null;
   const prv = i - 1 >= 0 ? state.lines[i - 1] : null;
@@ -382,9 +251,8 @@ function commitTrack(np, lines, cover, elapsed, rate) {
     document.body.style.setProperty('--fl-cover-url', `url("${cover}")`);
     const coverImg = document.getElementById('cover');
     if (coverImg) coverImg.src = cover;
-    applyAccentFromCover(cover).then(FL_AUDIO.updateSoloAccent);
+    applyAccentFromCover(cover);
   }
-  FL_AUDIO.refreshSoloMeta();
 
   state.lines = lines;
   // Song identity for the semantic-motion cache. Prefer muse's NetEase songId;
@@ -513,7 +381,6 @@ function tick() {
   const dt = (performance.now() - state.lastSyncAt) / 1000;
   const t = state.elapsed + dt * state.rate;
   renderAt(t);
-  applyKaraoke(t);
   FL_CONVO.applyGap(t);
   FL_AUDIO.frame();
   requestAnimationFrame(tick);
@@ -598,16 +465,8 @@ function applyTheme(name) {
   if (theme.fx) window.FL_FX?.start(theme.fx);
   else          window.FL_FX?.stop();
 
-  // 4b) Theme-specific DOM prep. Piano lazily builds its key strip once.
-  if (name === 'piano') FL_AUDIO.buildPiano();
-  if (name === 'sakura') buildSakuraPool();
+  // 4b) Theme-specific DOM prep.
   if (theme.layout === 'conversation') { FL_CONVO.build(); FL_CONVO.refreshHeader(); }
-  if (theme.layout === 'solo') {
-    FL_AUDIO.ensureSolo();
-    FL_AUDIO.resizeSolo();
-    FL_AUDIO.refreshSoloMeta();
-    FL_AUDIO.updateSoloAccent();
-  }
 
   // Persistence is split: the *default* theme (manual pick) is saved by
   // setAndReportTheme(); auto-switch-driven applies do NOT overwrite it.
