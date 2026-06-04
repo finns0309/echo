@@ -20,6 +20,7 @@
         <button id="fwd" title="歌词 +0.2s">+</button>
         <span class="divider"></span>
         <button id="pin" title="鼠标穿透">◌</button>
+        <button id="maximize" title="铺满屏幕 / 还原">⤢</button>
         <button id="close" title="退出">×</button>
       </div>
     </div>
@@ -52,6 +53,10 @@
     <!-- Storm layer. Heavy rain hatching is via tint-image (in tokens), but
          the lightning flash needs a JS-toggled element so onsets can fire it. -->
     <div id="lightning"></div>
+
+    <!-- Three.js layer. Shared canvas for all 3D lyric themes.
+         Only visible under data-layout="three". -->
+    <canvas id="three-canvas"></canvas>
 
     <!-- Solo / instrumental layer. A canvas takes the full window for the
          spectrum + particle visuals; meta is layered on top via DOM. -->

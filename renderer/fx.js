@@ -159,7 +159,132 @@ void main() {
   gl_FragColor = vec4(col, 1.0);
 }`;
 
-const SHADERS = { plasma: FRAG_PLASMA, ripple: FRAG_RIPPLE };
+// Rain-on-glass: water running down a foggy pane, the accent-tinted backdrop
+// refracting + smearing through the droplets. DESIGN_DIRECTIONS §2 ("piano
+// theme's shader-grade sibling"). No texture input — the "backdrop" is a
+// procedural accent field, and droplets distort it by perturbing the sample
+// UV plus adding a lens highlight. Droplet density + streak speed/length scale
+// with uRms when the spectrum channel is live (app.js feeds it), else the
+// shader animates on uTime alone (uRms stays at a small idle floor).
+//
+// Performance: the static droplet layer samples a single hash cell (no 3×3
+// neighbourhood), and the runners loop a fixed RUNNERS count. Combined with the
+// half-res canvas in resize() this stays in the same cost class as ripple.
+const FRAG_RAIN = `
+precision highp float;
+uniform vec2  uRes;
+uniform float uTime;
+uniform vec3  uAccent;
+uniform float uRms;   // 0..~0.6 loudness; drives droplet density + streak speed
+
+const vec3 GLASS_DEEP = vec3(0.04, 0.07, 0.11); // matches --fl-bg-color edge
+const vec3 GLASS_LIT  = vec3(0.16, 0.22, 0.30);
+const int  RUNNERS = 8;
+
+float hash21(vec2 p) {
+  vec3 p3 = fract(vec3(p.xyx) * 0.1031);
+  p3 += dot(p3, p3.yzx + 33.33);
+  return fract((p3.x + p3.y) * p3.z);
+}
+vec2 hash22(vec2 p) {
+  vec3 p3 = fract(vec3(p.xyx) * vec3(0.1031, 0.1030, 0.0973));
+  p3 += dot(p3, p3.yzx + 33.33);
+  return fract((p3.xx + p3.yz) * p3.zy);
+}
+
+// Procedural accent-tinted backdrop. This is what the droplets refract: a
+// vertical glass gradient + two slow accent blobs + a faint shimmer.
+vec3 backdrop(vec2 uv) {
+  vec3 col = mix(GLASS_DEEP, GLASS_LIT, uv.y);
+  // Two drifting soft accent pools so the pane isn't flat — like coloured
+  // light behind frosted glass.
+  vec2 b1 = vec2(0.32 + 0.06 * sin(uTime * 0.18), 0.62 + 0.05 * cos(uTime * 0.21));
+  vec2 b2 = vec2(0.74 + 0.05 * cos(uTime * 0.15), 0.30 + 0.06 * sin(uTime * 0.13));
+  float g1 = exp(-dot(uv - b1, uv - b1) * 6.0);
+  float g2 = exp(-dot(uv - b2, uv - b2) * 7.5);
+  col += uAccent * (g1 * 0.5 + g2 * 0.38);
+  // Faint horizontal shimmer for life.
+  col += 0.015 * sin(uv.y * 60.0 + uTime * 0.6);
+  return col;
+}
+
+void main() {
+  vec2 uv = gl_FragCoord.xy / uRes;
+  float aspect = uRes.x / uRes.y;
+
+  // Loudness → activity. Idle floor keeps a gentle drizzle when muse is absent.
+  float act = clamp(0.28 + uRms * 1.7, 0.28, 1.0);
+
+  // Refraction offset accumulator (perturbs the backdrop sample) + a highlight
+  // accumulator (specular glints on droplet crests) + a "clear" accumulator
+  // (where water has wiped the fog away, the glass reads sharper/brighter).
+  vec2  refr  = vec2(0.0);
+  float spec  = 0.0;
+  float clear = 0.0;
+
+  // ---- Static droplet layer: a hashed grid of small clinging drops. Denser
+  // when loud. Each cell holds at most one drop at a jittered position.
+  float cells = mix(9.0, 15.0, act);
+  vec2 gv = vec2(uv.x * aspect, uv.y) * cells;
+  vec2 cid = floor(gv);
+  vec2 cf  = fract(gv);
+  vec2 rnd = hash22(cid);
+  // Drop present in this cell only if its hash clears a density gate.
+  float present = step(1.0 - (0.35 + act * 0.4), hash21(cid + 3.1));
+  vec2 dpos = vec2(0.5) + (rnd - 0.5) * 0.6;
+  float dr  = length(cf - dpos);
+  float drop = present * smoothstep(0.34, 0.05, dr);
+  refr  += (cf - dpos) * drop * 0.9;
+  spec  += pow(smoothstep(0.3, 0.0, dr) * present, 2.5) * 0.6;
+  clear += drop * 0.6;
+
+  // ---- Runners: a fixed set of columns where a larger drop falls, advancing
+  // down the pane (faster when loud) and dragging a thin clearing trail behind.
+  for (int i = 0; i < RUNNERS; i++) {
+    float fi = float(i);
+    float colx = fract(hash21(vec2(fi, 7.0)) + 0.07 * fi);   // column position
+    float speed = (0.12 + hash21(vec2(fi, 3.0)) * 0.22) * (0.6 + act * 1.4);
+    float phase = hash21(vec2(fi, 11.0));
+    // Head y travels 1→0 (top to bottom) and wraps; wobble adds organic sway.
+    float yhead = fract(phase - uTime * speed);
+    float headY = 1.0 - yhead;
+    float wob = 0.012 * sin(uTime * 1.3 + fi * 2.0 + uv.y * 8.0);
+    float dx = (uv.x - colx - wob) * aspect;
+    float colW = 0.010 + hash21(vec2(fi, 5.0)) * 0.012;
+    float lane = smoothstep(colW, 0.0, abs(dx));
+    // Head droplet (a fat lens) + trail above the head (fading clearing band).
+    float dyHead = uv.y - headY;
+    float head = lane * smoothstep(0.05, 0.0, abs(dyHead));
+    float trail = lane * smoothstep(0.0, 0.45, headY - uv.y) * step(uv.y, headY);
+    refr.y += head * 1.6 + trail * 0.25;
+    refr.x += dx * 0.3 * head;
+    spec   += pow(head, 2.0) * 0.7;
+    clear  += head * 0.8 + trail * 0.35;
+  }
+
+  // Sample the backdrop through the accumulated refraction. Droplets act as
+  // little lenses: where they sit, the backdrop is displaced + magnified.
+  vec2 suv = uv + refr * vec2(0.06 / aspect, 0.06);
+  vec3 col = backdrop(suv);
+
+  // Fog: the bare glass is hazed (lifted toward a flat grey-blue); water clears
+  // it back to the sharp, slightly brighter backdrop. So drops + trails read as
+  // "wiped" streaks on a misted pane.
+  vec3 fog = mix(GLASS_DEEP, GLASS_LIT, 0.5) + uAccent * 0.06;
+  float haze = clamp(0.55 - clear, 0.0, 0.55);
+  col = mix(col, fog, haze);
+
+  // Specular glints on droplet crests — a cool white rim that sells the wet
+  // 3D bead. Tinted very slightly by accent so it belongs to the scene.
+  col += (vec3(0.85, 0.92, 1.0) * 0.7 + uAccent * 0.3) * clamp(spec, 0.0, 1.0);
+
+  // Vignette to seat the pane in the window.
+  vec2 c = uv - 0.5; c.x *= aspect;
+  col *= 1.0 - dot(c, c) * 0.45;
+  gl_FragColor = vec4(col, 1.0);
+}`;
+
+const SHADERS = { plasma: FRAG_PLASMA, ripple: FRAG_RIPPLE, rain: FRAG_RAIN };
 
 // Ripple state. Up to RIPPLE_SLOTS active at once — older ones get evicted.
 const RIPPLE_SLOTS = 6;

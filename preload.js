@@ -13,6 +13,7 @@ contextBridge.exposeInMainWorld('api', {
   onBoundsChange:        (cb) => ipcRenderer.on('theme-bounds-changed',       (_, p) => cb(p)),
   onClickThroughChange:  (cb) => ipcRenderer.on('theme-clickthrough-changed', (_, p) => cb(p)),
   onResetWindow:         (cb) => ipcRenderer.on('reset-window-override',     (_, p) => cb(p)),
+  toggleMaximizeBounds: () => ipcRenderer.invoke('toggle-maximize-bounds'),
   quit: () => ipcRenderer.invoke('quit'),
   reportTheme: (name) => ipcRenderer.send('theme-changed', name),
   onApplyTheme: (cb) => ipcRenderer.on('apply-theme', (_, name) => cb(name)),

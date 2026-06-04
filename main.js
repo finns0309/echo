@@ -269,6 +269,32 @@ ipcMain.handle('set-ignore-mouse-events', (_, ignore) => {
   win.setIgnoreMouseEvents(ignore, { forward: true });
 });
 
+// Pseudo-fullscreen: stretch the window to fill the work area, remember the
+// pre-expand bounds so a second toggle restores them. Not OS fullscreen —
+// we stay frame-less and on top.
+let preMaximizeBounds = null;
+ipcMain.handle('toggle-maximize-bounds', () => {
+  if (!win || win.isDestroyed()) return false;
+  const cur = win.getBounds();
+  // Use the display the window currently sits on, not the primary display —
+  // otherwise a maximize on the external monitor yanks the window back to the
+  // built-in screen.
+  const wa = screen.getDisplayMatching(cur).workArea;
+  const isMax = preMaximizeBounds == null &&
+    cur.x === wa.x && cur.y === wa.y &&
+    cur.width === wa.width && cur.height === wa.height;
+  suppressBoundsEventUntil = Date.now() + 300;
+  if (preMaximizeBounds) {
+    win.setBounds(preMaximizeBounds);
+    preMaximizeBounds = null;
+    return false;
+  }
+  if (isMax) return true;
+  preMaximizeBounds = cur;
+  win.setBounds({ x: wa.x, y: wa.y, width: wa.width, height: wa.height });
+  return true;
+});
+
 ipcMain.handle('quit', () => app.quit());
 
 function rebuildTrayMenu() {
@@ -336,7 +362,14 @@ function rebuildTrayMenu() {
         if (currentTheme) win.webContents.send('reset-window-override', { name: currentTheme });
       },
     },
-    { label: 'Show / focus window', click: () => win.show() },
+    {
+      label: win && !win.isDestroyed() && win.isVisible() ? '隐藏悬浮歌词' : '显示悬浮歌词',
+      click: () => {
+        if (!win || win.isDestroyed()) return;
+        if (win.isVisible()) win.hide(); else win.show();
+        rebuildTrayMenu();
+      },
+    },
     { type: 'separator' },
     { label: 'Quit', click: () => app.quit() },
   ]);

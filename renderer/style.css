@@ -33,6 +33,9 @@
   --radius: 20px;
   --ease-out:    cubic-bezier(0.2, 0.8, 0.2, 1);
   --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  /* Gentler overshoot for large/marquee type, where the full spring reads as a
+     cartoonish bounce. Settles with just a hair of overshoot. */
+  --ease-spring-soft: cubic-bezier(0.33, 1.30, 0.5, 1);
 
   /* Responsive scale — written by app.js updateScale() from window diagonal.
      Lyric rules multiply their base sizes by this so fullscreen gets large
@@ -315,10 +318,14 @@ body[data-source="mediaremote"] #source-badge { display: inline-block; }
   -webkit-text-stroke: var(--fl-text-stroke, 0);
   filter:         var(--fl-text-filter, none);
   will-change: transform, opacity, filter;
+  /* Leave choreography is multi-stage so a departing line *dissipates* rather
+     than sliding off as one rigid block: it blurs out early (~1s), keeps
+     drifting up over the full duration, and holds its ink a beat before fading
+     late. All sub-durations stay under the 2200ms JS removal window. */
   transition:
-    transform 2200ms cubic-bezier(0.22, 1, 0.36, 1),
-    opacity   2200ms cubic-bezier(0.22, 1, 0.36, 1),
-    filter    2200ms cubic-bezier(0.22, 1, 0.36, 1);
+    transform 2000ms cubic-bezier(0.22, 1, 0.36, 1),
+    filter    1000ms cubic-bezier(0.33, 0, 0.2, 1),
+    opacity   1500ms cubic-bezier(0.45, 0, 0.55, 1) 450ms;
 }
 .stage-card.leaving {
   /* Leave distance scales with window — otherwise on a fullscreen canvas the
@@ -456,6 +463,32 @@ body[data-reveal="karaoke"] .stage-card .wi.now {
          filter: blur(0); }
 }
 
+/* flip · Solari split-flap. Each char folds down from its top hinge
+   (rotateX) into place, staggered left→right by --i so the board "cascades".
+   A short over-rotation past 0° then settle reads as the mechanical clack of
+   a flap dropping. The hairline split line across each glyph + the leaf
+   cabinet styling live in the theme-flip bespoke block (they need the
+   monospace cell geometry tokens). Perspective is set on the card there too.
+   We suppress the floating .w wobble — a departure board doesn't drift. */
+body[data-reveal="flip"] .stage-card .w  { animation: none; }
+body[data-reveal="flip"] .stage-card .wi {
+  opacity: 0;
+  transform-origin: 50% 0;
+  transform: rotateX(-92deg);
+  animation: reveal-flip 540ms cubic-bezier(0.3, 0.9, 0.35, 1.25) forwards;
+  /* 60ms/char cascade across the board. The flap itself is quick (~0.5s) so a
+     long line still finishes its sweep in a readable beat. */
+  animation-delay: calc(var(--i) * 60ms);
+  backface-visibility: hidden;
+}
+@keyframes reveal-flip {
+  0%   { opacity: 0; transform: rotateX(-92deg); }
+  /* Snap visible as the leaf passes vertical, then a hair of overshoot past
+     flat (the spring on the cubic-bezier handles the settle back to 0). */
+  55%  { opacity: 1; transform: rotateX(8deg); }
+  100% { opacity: 1; transform: rotateX(0deg); }
+}
+
 /* none · no reveal (used by triplet/single layouts that don't render stage) */
 body[data-reveal="none"] .stage-card .w  { animation: none; }
 body[data-reveal="none"] .stage-card .wi { opacity: 1; }
@@ -502,11 +535,39 @@ body[data-layout="danmaku"] #tint,
 body[data-layout="danmaku"] #fx { display: none; }
 body[data-layout="danmaku"] #danmaku { display: block; }
 
+/* Three.js canvas — shown whenever a 3D driver is active (data-three on body).
+   For pure-3D layout (layout="three") it replaces DOM lyrics entirely.
+   For overlay mode (e.g. stage + three) it layers particles on top. */
+body[data-layout="three"] #lyrics,
+body[data-layout="three"] #stage,
+body[data-layout="three"] #cover-panel { display: none; }
+body[data-three] #three-canvas { display: block; }
+
+#three-canvas {
+  display: none;
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 6;
+  pointer-events: none;
+}
+
+/* Shatter: suppress the normal CSS leave animation — Three.js handles exit. */
+body[data-three="shatter"] .stage-card.leaving {
+  opacity: 0 !important;
+  transition: opacity 80ms linear !important;
+}
+
 /* triplet default look — prev/next muted, curr emphasized */
 body[data-layout="triplet"] .line {
+  /* filter is in the list now so the changing-state blur(1px) eases in/out
+     instead of snapping; transform rides a longer spring so the new current
+     line settles with a little life. */
   transition:
-    opacity 360ms var(--ease-out),
-    transform 420ms var(--ease-spring),
+    opacity 300ms var(--ease-out),
+    transform 480ms var(--ease-spring),
+    filter 360ms var(--ease-out),
     font-weight 360ms var(--ease-out);
 }
 body[data-layout="triplet"] .line.prev,
@@ -538,11 +599,14 @@ body[data-layout="single"] #lyrics {
 body[data-layout="single"] .line.curr {
   font-size: calc(var(--fl-text-size, 34px) * var(--fl-scale) * var(--fl-text-scale-bias, 1));
   font-weight: var(--fl-text-weight, 700);
+  /* Staggered so the giant line "focuses" in: opacity first, blur and
+     letter-spacing trailing, transform last on the soft spring for a settle
+     that doesn't over-bounce at marquee size. */
   transition:
-    opacity 420ms var(--ease-out),
-    filter 420ms var(--ease-out),
-    transform 520ms var(--ease-spring),
-    letter-spacing 420ms var(--ease-out);
+    opacity 360ms var(--ease-out),
+    filter 460ms var(--ease-out),
+    transform 620ms var(--ease-spring-soft),
+    letter-spacing 520ms var(--ease-out);
 }
 body[data-layout="single"] .line.curr.changing {
   opacity: 0;
@@ -1184,4 +1248,296 @@ body.theme-subtitle .line.curr.changing {
 }
 body.theme-subtitle #topbar {
   top: calc(8px * min(var(--fl-scale), 1.8));
+}
+
+/* ========================================================================= */
+/*  §KINETIC — ボカロ MV style kinetic typography                             */
+/*  Each .stage-card is positioned randomly via --kx/--ky/--kscale/--krot,   */
+/*  stamped by JS. Cards enter via one of several named animations chosen    */
+/*  per-card (data-kenter). Leaving cards shrink + blur away.                */
+/* ========================================================================= */
+
+body.theme-kinetic .stage-card {
+  top: var(--ky, 50%);
+  left: var(--kx, 50%);
+  right: auto;
+  padding: 0;
+  transform:
+    translate(-50%, -50%)
+    scale(var(--kscale, 1))
+    rotate(var(--krot, 0deg));
+  transform-origin: center center;
+  text-align: var(--kalign, center);
+  white-space: nowrap;
+  transition: none;
+  will-change: transform, opacity;
+}
+
+/* suppress the normal reveal per-char animations — kinetic uses whole-card entrance */
+body.theme-kinetic .stage-card .w  { animation: none; }
+body.theme-kinetic .stage-card .wi { opacity: 1; animation: none; }
+
+/* entrance variants */
+body.theme-kinetic .stage-card[data-kenter="slide-left"] {
+  animation: k-slide-left 600ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+body.theme-kinetic .stage-card[data-kenter="slide-right"] {
+  animation: k-slide-right 600ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+body.theme-kinetic .stage-card[data-kenter="slide-up"] {
+  animation: k-slide-up 550ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+body.theme-kinetic .stage-card[data-kenter="zoom-in"] {
+  animation: k-zoom-in 500ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+body.theme-kinetic .stage-card[data-kenter="zoom-out"] {
+  animation: k-zoom-out 500ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+body.theme-kinetic .stage-card[data-kenter="drop"] {
+  animation: k-drop 550ms cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+@keyframes k-slide-left {
+  0%   { opacity: 0; transform: translate(calc(-50% + 120px), -50%) scale(var(--kscale, 1)) rotate(var(--krot, 0deg)); }
+  100% { opacity: 1; transform: translate(-50%, -50%) scale(var(--kscale, 1)) rotate(var(--krot, 0deg)); }
+}
+@keyframes k-slide-right {
+  0%   { opacity: 0; transform: translate(calc(-50% - 120px), -50%) scale(var(--kscale, 1)) rotate(var(--krot, 0deg)); }
+  100% { opacity: 1; transform: translate(-50%, -50%) scale(var(--kscale, 1)) rotate(var(--krot, 0deg)); }
+}
+@keyframes k-slide-up {
+  0%   { opacity: 0; transform: translate(-50%, calc(-50% + 80px)) scale(var(--kscale, 1)) rotate(var(--krot, 0deg)); }
+  100% { opacity: 1; transform: translate(-50%, -50%) scale(var(--kscale, 1)) rotate(var(--krot, 0deg)); }
+}
+@keyframes k-zoom-in {
+  0%   { opacity: 0; transform: translate(-50%, -50%) scale(calc(var(--kscale, 1) * 0.3)) rotate(var(--krot, 0deg)); }
+  100% { opacity: 1; transform: translate(-50%, -50%) scale(var(--kscale, 1)) rotate(var(--krot, 0deg)); }
+}
+@keyframes k-zoom-out {
+  0%   { opacity: 0; transform: translate(-50%, -50%) scale(calc(var(--kscale, 1) * 2.2)) rotate(var(--krot, 0deg)); filter: blur(8px); }
+  100% { opacity: 1; transform: translate(-50%, -50%) scale(var(--kscale, 1)) rotate(var(--krot, 0deg)); filter: blur(0); }
+}
+@keyframes k-drop {
+  0%   { opacity: 0; transform: translate(-50%, calc(-50% - 100px)) scale(var(--kscale, 1)) rotate(calc(var(--krot, 0deg) + 8deg)); }
+  100% { opacity: 1; transform: translate(-50%, -50%) scale(var(--kscale, 1)) rotate(var(--krot, 0deg)); }
+}
+
+/* leaving: quick shrink + blur out in place */
+body.theme-kinetic .stage-card.leaving {
+  transform: translate(-50%, -50%) scale(calc(var(--kscale, 1) * 0.6)) rotate(var(--krot, 0deg));
+  opacity: 0;
+  filter: blur(14px);
+  transition:
+    transform 800ms cubic-bezier(0.4, 0, 0.2, 1),
+    opacity   600ms ease-out,
+    filter    800ms ease-out;
+  animation: none !important;
+}
+
+/* ========================================================================= */
+/*  §V2 BESPOKE — flip (Solari) · semantic (kinetic typography)              */
+/*  rain's visuals are entirely shader-side (fx.js); no CSS block needed.    */
+/* ========================================================================= */
+
+/* ----- flip · Solari split-flap departure board / 翻牌 ----- */
+/* The reveal-flip keyframe (in §REVEALS) does the rotateX fold; this block
+   makes each .wi look like a physical flap leaf (dark face, vertical gradient,
+   hairline split across the middle) and gives the card the perspective the
+   rotateX needs to read as 3D. Monospace + uppercase tokens (themes.js) give
+   the uniform-cell departure-board grid. */
+body.theme-flip .stage-card {
+  /* Perspective so each leaf's rotateX has depth instead of a flat squash.
+     transform-style preserved so the per-char ::after split line rotates with
+     the leaf. */
+  perspective: 700px;
+  transform-style: preserve-3d;
+  /* A touch of letter-spacing already in tokens; keep the line on one row so
+     the board reads as a single split-flap strip. Long lines still wrap — the
+     flaps just continue on the next row. */
+  line-height: 1.18;
+}
+body.theme-flip .stage-card .w {
+  /* Tight inter-flap gap so neighbouring leaves look like one mechanical row. */
+  margin: 0 0.5px;
+}
+body.theme-flip .stage-card .wi {
+  position: relative;
+  /* Fixed-ish cell so spaces and glyphs share the departure-board grid. min
+     width keeps narrow glyphs (I, l, 1) from collapsing the leaf. */
+  min-width: 0.62em;
+  padding: 0.08em 0.06em 0.1em;
+  text-align: center;
+  border-radius: 3px;
+  /* Flap face: two-tone vertical gradient, darker at the hinge, so the split
+     line below reads as the seam between an upper + lower leaf. */
+  background:
+    linear-gradient(180deg,
+      rgba(36, 38, 44, 0.96) 0%,
+      rgba(26, 28, 33, 0.96) 49.6%,
+      rgba(14, 15, 19, 0.98) 50.4%,
+      rgba(22, 24, 29, 0.96) 100%);
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.55),
+    0 0 0 0.5px rgba(0, 0, 0, 0.7),
+    inset 0 0.5px 0 rgba(255, 255, 255, 0.06);
+}
+/* The split line: a hard hairline across the vertical centre of every leaf,
+   the defining feature of a split-flap glyph. */
+body.theme-flip .stage-card .wi::after {
+  content: '';
+  position: absolute;
+  left: 0; right: 0; top: 50%;
+  height: 1px;
+  transform: translateY(-0.5px);
+  background: rgba(0, 0, 0, 0.85);
+  box-shadow: 0 0.5px 0 rgba(255, 255, 255, 0.05);
+  pointer-events: none;
+}
+/* Leaving: the board clears by flapping the old line away (fold up from the
+   bottom hinge) rather than the default drift-up-and-blur. Suppresses the
+   stage default leave transform so the flaps fold in place. */
+body.theme-flip .stage-card.leaving {
+  transform: translateY(-50%);
+  opacity: 0;
+  filter: none;
+  transition: opacity 360ms ease-out 140ms;
+}
+body.theme-flip .stage-card.leaving .wi {
+  transform-origin: 50% 100%;
+  animation: flip-clear 280ms cubic-bezier(0.4, 0, 0.7, 0.5) forwards;
+  animation-delay: calc(var(--i) * 26ms);
+}
+@keyframes flip-clear {
+  0%   { transform: rotateX(0deg);   opacity: 1; }
+  100% { transform: rotateX(88deg);  opacity: 0; }
+}
+
+/* ----- semantic · kinetic typography / 动态字 ----- */
+/* Word-level rendering (app.js renderStage semantic branch): each .wi is a
+   whole word tagged with data-motion. Concerns are split across the two
+   nested spans so an entrance and a perpetual motion can both use transform
+   without fighting:
+     .w  → staggered fade/rise ENTRANCE (opacity + translateY), by --i.
+     .wi → perpetual MOTION keyed off data-motion (fall/rise/stretch/...).
+   Words with no motion just enter and hold still. */
+body.theme-semantic .stage-card {
+  /* Slightly looser line-height so vertical drift motions (fall/rise/fly)
+     have room without colliding with neighbouring wrapped rows. */
+  line-height: 1.34;
+}
+body.theme-semantic .stage-card .w {
+  /* Override the default w-float wobble — entrance is owned here instead. */
+  opacity: 0;
+  transform: translateY(0.5em);
+  animation: sem-enter 620ms cubic-bezier(0.2, 0.9, 0.25, 1) forwards;
+  animation-delay: calc(var(--i) * 70ms);
+}
+@keyframes sem-enter {
+  0%   { opacity: 0; transform: translateY(0.5em); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+body.theme-semantic .stage-card .wi {
+  display: inline-block;
+  /* Default resting weight; stress raises it (below). */
+  transition: font-weight 300ms var(--ease-out);
+}
+
+/* fall · gentle, continuous downward sink-and-recover. Small amplitude so the
+   word reads as "weighed down" rather than literally leaving the line. */
+body.theme-semantic .wi[data-motion="fall"] {
+  animation: sem-fall 3.2s ease-in-out infinite;
+  animation-delay: calc(var(--seed, 0) * -2s);
+}
+@keyframes sem-fall {
+  0%, 100% { transform: translateY(0);      opacity: 1;    }
+  60%      { transform: translateY(0.22em); opacity: 0.82; }
+}
+
+/* rise · the mirror of fall — a slow lift. */
+body.theme-semantic .wi[data-motion="rise"] {
+  animation: sem-rise 3.4s ease-in-out infinite;
+  animation-delay: calc(var(--seed, 0) * -2s);
+}
+@keyframes sem-rise {
+  0%, 100% { transform: translateY(0);       }
+  55%      { transform: translateY(-0.2em);  }
+}
+
+/* stretch · forever/endless — letter-spacing breathes wide and back. Uses the
+   word's own tracking; large but slow so it reads as "drawn out". */
+body.theme-semantic .wi[data-motion="stretch"] {
+  animation: sem-stretch 4.6s ease-in-out infinite;
+}
+@keyframes sem-stretch {
+  0%, 100% { letter-spacing: 0.02em; }
+  50%      { letter-spacing: 0.42em; }
+}
+
+/* shake · break/shatter — a tight nervous jitter. Tiny offsets, fast, so it
+   reads as a word about to come apart without being seizure-y. */
+body.theme-semantic .wi[data-motion="shake"] {
+  animation: sem-shake 0.42s steps(2, end) infinite;
+}
+@keyframes sem-shake {
+  0%   { transform: translate(0, 0)        rotate(0deg);    }
+  25%  { transform: translate(-0.04em, 0.02em) rotate(-1.4deg); }
+  50%  { transform: translate(0.05em, -0.03em) rotate(1.1deg);  }
+  75%  { transform: translate(-0.03em, 0.01em) rotate(-0.8deg); }
+  100% { transform: translate(0, 0)        rotate(0deg);    }
+}
+
+/* pulse · heart/beat/love — a soft double-thump scale, like a heartbeat. */
+body.theme-semantic .wi[data-motion="pulse"] {
+  transform-origin: center center;
+  animation: sem-pulse 1.5s ease-in-out infinite;
+}
+@keyframes sem-pulse {
+  0%, 55%, 100% { transform: scale(1);    }
+  14%           { transform: scale(1.14); }
+  28%           { transform: scale(1.04); }
+  40%           { transform: scale(1.1);  }
+}
+
+/* fly · float/dream/drift — a slow lazy figure-of-eight drift. */
+body.theme-semantic .wi[data-motion="fly"] {
+  animation: sem-fly 5.2s ease-in-out infinite;
+  animation-delay: calc(var(--seed, 0) * -3s);
+}
+@keyframes sem-fly {
+  0%, 100% { transform: translate(0, 0)          rotate(0deg);    }
+  25%      { transform: translate(0.12em, -0.14em) rotate(1.2deg);  }
+  50%      { transform: translate(0.02em, -0.22em) rotate(-0.8deg); }
+  75%      { transform: translate(-0.1em, -0.12em) rotate(0.6deg);  }
+}
+
+/* fade · gone/forget/vanish — the word breathes toward transparency, never
+   fully gone (it's still a lyric you need to read). */
+body.theme-semantic .wi[data-motion="fade"] {
+  animation: sem-fade 3.8s ease-in-out infinite;
+  animation-delay: calc(var(--seed, 0) * -2s);
+}
+@keyframes sem-fade {
+  0%, 100% { opacity: 1;    filter: blur(0);     }
+  55%      { opacity: 0.32; filter: blur(1.4px); }
+}
+
+/* stress · content-word emphasis. No perpetual motion — just a heavier resting
+   weight + a one-shot bump as it enters, so the ear-landing words sit prouder
+   than the function words around them. */
+body.theme-semantic .wi[data-motion="stress"] {
+  font-weight: 900;
+  animation: sem-stress 600ms var(--ease-spring-soft) both;
+  animation-delay: calc(var(--i) * 70ms + 120ms);
+}
+@keyframes sem-stress {
+  0%   { transform: scale(1);    }
+  45%  { transform: scale(1.16); }
+  100% { transform: scale(1);    }
+}
+
+/* Honour reduced-motion: drop the perpetual loops (entrance still plays). */
+@media (prefers-reduced-motion: reduce) {
+  body.theme-semantic .wi[data-motion] { animation: none !important; }
+  body.theme-semantic .wi[data-motion="stretch"] { letter-spacing: 0.1em; }
+  body.theme-semantic .wi[data-motion="stress"]  { font-weight: 900; }
 }

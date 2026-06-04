@@ -403,6 +403,76 @@ const THEMES = [
     },
   },
 
+  // ---------- stage · kinetic (术曲 — ボカロ MV style kinetic typography) -----
+  // Each line appears at a random screen position with random scale, rotation,
+  // and entrance animation — mimicking the dynamic layout of Vocaloid MVs.
+  {
+    name: 'kinetic', label: '术曲', window: 'ambient',
+    layout: 'stage', reveal: 'none',
+    customClass: true,
+    tokens: {
+      '--fl-bg-blur':       '42px',
+      '--fl-bg-saturate':   '1.5',
+      '--fl-bg-brightness': '0.42',
+      '--fl-bg-scale':      '1.45',
+      '--fl-tint-image': `
+        linear-gradient(180deg, rgba(0,0,0,0.10), rgba(0,0,0,0.40)),
+        radial-gradient(ellipse 90% 65% at 50% 50%, var(--accent-glow), transparent 65%)`,
+      '--fl-text-color':    '#fff',
+      '--fl-text-size':     '30px',
+      '--fl-text-weight':   '900',
+      '--fl-letter-spacing':'1px',
+      '--fl-text-shadow': `
+        0 2px 14px rgba(0,0,0,0.6),
+        0 0 28px var(--accent-glow)`,
+    },
+  },
+
+  // ---------- stage · shatter (字碎 — character explosion on line exit) ------
+  // Lyrics render in DOM via stage layout. When a line leaves, its characters
+  // burst into spinning particles via Three.js overlay. Overlay mode: the
+  // 3D canvas layers on top of normal stage rendering.
+  {
+    name: 'shatter', label: '字碎', window: 'headline',
+    layout: 'stage', reveal: 'wave', three: 'shatter',
+    tokens: {
+      '--fl-bg-blur':       '48px',
+      '--fl-bg-saturate':   '1.5',
+      '--fl-bg-brightness': '0.55',
+      '--fl-bg-scale':      '1.4',
+      '--fl-tint-image': `
+        linear-gradient(180deg, rgba(0,0,0,0.15), rgba(0,0,0,0.45)),
+        radial-gradient(ellipse 90% 65% at 50% 50%, var(--accent-glow), transparent 65%)`,
+      '--fl-text-color':    '#fff',
+      '--fl-text-size':     '32px',
+      '--fl-text-weight':   '700',
+      '--fl-text-shadow':   '0 2px 14px rgba(0,0,0,0.5), 0 0 22px var(--accent-glow)',
+    },
+  },
+
+  // ---------- stage · dust (落灰 — settling luminous motes) -----------------
+  // Persistent particle system: tiny warm-tinted motes drift down like dust.
+  // Each line change spawns a burst of extra particles. Overlay mode on top
+  // of the normal stage layout.
+  {
+    name: 'dust', label: '落灰', window: 'ambient',
+    layout: 'stage', reveal: 'ink', three: 'dust',
+    tokens: {
+      '--fl-bg-blur':       '42px',
+      '--fl-bg-saturate':   '1.1',
+      '--fl-bg-brightness': '0.35',
+      '--fl-bg-scale':      '1.35',
+      '--fl-tint-image': `
+        linear-gradient(180deg, rgba(10,8,6,0.25), rgba(10,8,6,0.60)),
+        radial-gradient(ellipse 80% 60% at 50% 50%, var(--accent-glow), transparent 70%)`,
+      '--fl-text-color':    '#efe7d8',
+      '--fl-text-size':     '32px',
+      '--fl-text-weight':   '700',
+      '--fl-letter-spacing':'1px',
+      '--fl-text-shadow':   '0 2px 10px rgba(0,0,0,0.6), 0 0 20px rgba(0,0,0,0.4)',
+    },
+  },
+
   // ---------- solo · instrumental visualizer / 纯音乐 ----------
   // The default target for tracks NetEase flagged with pureMusic. No cover,
   // no lyrics — full-canvas spectrum + onset-driven particles, with the song
@@ -495,6 +565,7 @@ const THEMES = [
     },
   },
 
+
   // ---------- triplet · minimal (Apple Music look) ----------
   {
     name: 'minimal', label: 'Apple Music', window: 'wide',
@@ -508,6 +579,100 @@ const THEMES = [
       '--fl-tint-image': `
         linear-gradient(180deg, rgba(0,0,0,0.18), rgba(0,0,0,0.55)),
         radial-gradient(ellipse 120% 80% at 50% 50%, transparent 40%, rgba(0,0,0,0.25) 100%)`,
+    },
+  },
+
+  // ======================================================================
+  //  v2 themes (opt-in, additive). See V2_THEMES_NOTES.md.
+  // ======================================================================
+
+  // ---------- stage · flip (Solari split-flap / 翻牌) ----------------------
+  // Each character is a train-station split-flap leaf that mechanically flips
+  // (rotateX) into its new glyph on line change. The per-char `--i` stagger
+  // gives the classic cascade-across-the-board feel. Pure CSS (reveal=flip +
+  // a bespoke cabinet/hairline block) — no audio, no network. Monospace +
+  // a mechanical near-black palette so it reads as a physical board.
+  {
+    name: 'flip', label: '翻牌', window: 'headline',
+    layout: 'stage', reveal: 'flip',
+    customClass: true, // split-line hairline + flap cabinet styling
+    tokens: {
+      // Dark "departure board" cabinet. Cover is hidden — the board is the
+      // object, not a window onto the album. Bg color matches the flap face
+      // so any uncovered edge blends with the leaves.
+      '--fl-bg-color':      '#0c0d10',
+      '--fl-bg-image':      'none',
+      '--fl-tint-image': `
+        radial-gradient(ellipse 120% 90% at 50% 50%, transparent 55%, rgba(0,0,0,0.5) 100%),
+        repeating-linear-gradient(0deg, rgba(255,255,255,0.018) 0 1px, transparent 1px 2px)`,
+      '--fl-text-font':     '"SF Mono", "JetBrains Mono", Menlo, Consolas, "Courier New", monospace',
+      '--fl-text-weight':   '700',
+      '--fl-text-size':     '34px',
+      '--fl-letter-spacing':'2px',
+      '--fl-text-transform':'uppercase',
+      '--fl-text-color':    '#f2ede0',
+      '--fl-text-shadow':   '0 1px 0 rgba(0,0,0,0.8)',
+      '--fl-chrome-bg':     'rgba(14,15,18,0.6)',
+      '--fl-chrome-fg':     '#e8e3d6',
+      '--fl-chrome-border': 'rgba(255,255,255,0.1)',
+      '--fl-chrome-artist': 'rgba(232,227,214,0.55)',
+    },
+  },
+
+  // ---------- stage · semantic (kinetic typography / 动态字) ----------------
+  // "The text IS the animation." Words whose meaning implies motion move:
+  // fall/落 drops, forever/永远 stretches its tracking wide, break/碎 jitters,
+  // stressed/content words bump weight. Analysis is a DETERMINISTIC LOCAL
+  // heuristic (keyword→motion dictionary + a stress heuristic in app.js),
+  // cached per songId — NOT an LLM/network call. See app.js analyzeLineSemantic
+  // + the TODO there for swapping in a cached one-time LLM pass later.
+  {
+    name: 'semantic', label: '动态字', window: 'ambient',
+    layout: 'stage', reveal: 'semantic',
+    customClass: true, // word-level motion classes + per-word keyframes
+    tokens: {
+      '--fl-bg-blur':       '46px',
+      '--fl-bg-saturate':   '1.5',
+      '--fl-bg-brightness': '0.4',
+      '--fl-bg-scale':      '1.42',
+      '--fl-tint-image': `
+        linear-gradient(180deg, rgba(0,0,0,0.14), rgba(0,0,0,0.46)),
+        radial-gradient(ellipse 90% 65% at 50% 50%, var(--accent-glow), transparent 66%)`,
+      '--fl-text-color':    '#fff',
+      '--fl-text-size':     '34px',
+      '--fl-text-weight':   '700',
+      '--fl-letter-spacing':'0.4px',
+      '--fl-text-shadow': `
+        0 2px 14px rgba(0,0,0,0.58),
+        0 0 26px var(--accent-glow)`,
+    },
+  },
+
+  // ---------- stage · rain (rain-on-glass shader / 雨打玻璃) -----------------
+  // WebGL fragment shader (fx.js): water droplets run down glass, the
+  // accent-tinted backdrop refracting + smearing through them. Droplet
+  // density / streak length follow RMS when the spectrum channel is online,
+  // else animate on time. Ambient window profile (sit beside it like the
+  // other shader themes; don't click through).
+  {
+    name: 'rain', label: '雨打玻璃', window: 'ambient', fx: 'rain',
+    layout: 'stage', reveal: 'wave',
+    tokens: {
+      // Shader is the background; hide the cover. Bg color matches the
+      // shader's GLASS_DEEP so any uncovered edge blends rather than flashing.
+      '--fl-bg-color':     '#0a0f16',
+      '--fl-bg-image':     'none',
+      '--fl-bg-scale':     '1',
+      '--fl-tint-image': `
+        linear-gradient(180deg, rgba(6,10,16,0.18), rgba(6,10,16,0.5)),
+        radial-gradient(ellipse 120% 90% at 50% 50%, transparent 52%, rgba(0,0,0,0.4) 100%)`,
+      '--fl-text-color':   '#eef4fb',
+      '--fl-text-weight':  '700',
+      '--fl-text-size':    '32px',
+      '--fl-letter-spacing':'0.4px',
+      '--fl-text-shadow': `
+        0 2px 16px rgba(0,0,0,0.6),
+        0 0 24px rgba(170,200,235,0.4)`,
     },
   },
 ];
