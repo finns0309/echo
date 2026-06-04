@@ -2,7 +2,6 @@ const { app, BrowserWindow, ipcMain, screen, Menu, Tray, nativeImage } = require
 const path = require('path');
 const fs = require('fs');
 const net = require('net');
-const { execFile } = require('child_process');
 
 const BROADCAST_SOCK = '/tmp/echo.sock';
 
@@ -11,19 +10,11 @@ const TRAY_THEMES = require('./renderer/themes.js');
 let win;
 let tray;
 let clickThrough = false;
-let currentTheme = 'aura';
-// Scene rules cache, mirrored from the renderer so the tray menu can show the
-// right radio mark in the "按场景切换" submenu. Renderer is source of truth.
-const SCENE_KINDS = [
-  { id: 'instrumental', label: '纯音乐 (pureMusic)' },
-];
-let sceneRules = {};
+let currentTheme = 'typewriter';
 let broadcastServer;
 let broadcastClients = new Set();
 let broadcastTimer;
 let lastBroadcastKey = '';
-let lastElapsed = -1;
-let lastElapsedAt = 0;
 
 function createWindow() {
   const display = screen.getPrimaryDisplay();
@@ -90,27 +81,10 @@ async function pushState(force = false) {
   const np = await runNowPlaying();
   const bounds = win && !win.isDestroyed() ? win.getBounds() : null;
 
-  // nowplaying-cli's playbackRate is unreliable (NetEase reports 0 while playing),
-  // so treat "has title" as loaded and confirm with an advancing elapsed clock.
-  let playing = false;
-  const now = Date.now();
-  if (np && np.title) {
-    if (np.rate > 0) {
-      playing = true;
-    } else if (lastElapsed >= 0 && np.elapsed > lastElapsed + 0.1) {
-      playing = true;
-    } else if (lastElapsedAt === 0) {
-      playing = true;
-    }
-    lastElapsed = np.elapsed;
-    lastElapsedAt = now;
-  } else {
-    lastElapsed = -1;
-  }
-
+  // muse reports playing state reliably (rate = playing ? 1 : 0).
   const state = {
     type: 'state',
-    playing,
+    playing: !!(np && np.title && np.rate > 0),
     title: np?.title || '',
     artist: np?.artist || '',
     bounds,
@@ -137,34 +111,9 @@ function startBroadcastServer() {
   broadcastTimer = setInterval(() => pushState(false), 1000);
 }
 
-function callNowPlayingOnce() {
-  return new Promise((resolve) => {
-    execFile(
-      'nowplaying-cli',
-      ['get', '--json', 'title', 'artist', 'album', 'elapsedTime', 'duration', 'playbackRate'],
-      { timeout: 1500 },
-      (err, stdout) => {
-        if (err) return resolve(null);
-        let j;
-        try { j = JSON.parse(stdout); } catch { return resolve(null); }
-        if (!j.title || j.title === 'null') return resolve(null);
-        resolve({
-          title: j.title,
-          artist: j.artist && j.artist !== 'null' ? j.artist : '',
-          album: j.album && j.album !== 'null' ? j.album : '',
-          elapsed: typeof j.elapsedTime === 'number' ? j.elapsedTime : 0,
-          duration: typeof j.duration === 'number' ? j.duration : 0,
-          rate: typeof j.playbackRate === 'number' ? j.playbackRate : 0,
-        });
-      }
-    );
-  });
-}
-
-// Try the muse player first (http://127.0.0.1:10755/now). If it's running,
-// it owns the audio element and reports a frame-accurate currentTime — so
-// the renderer can throw away the local-clock estimation entirely. Falls
-// back to nowplaying-cli (NetEase official client) when muse isn't up.
+// Read the muse player (http://127.0.0.1:10755/now). muse owns the audio
+// element and reports a frame-accurate currentTime, songId, and cover.
+// Returns null when muse isn't up (echo then shows its idle state).
 // Protocol: ./NOW_PLAYING.md — any field change must land there + in muse
 // in the same commit.
 async function callMuseOnce() {
@@ -198,14 +147,7 @@ async function callMuseOnce() {
 }
 
 async function runNowPlaying() {
-  const muse = await callMuseOnce();
-  if (muse) return muse;
-  // Retry once on null — nowplaying-cli occasionally returns empty even when
-  // the song is playing; a quick second attempt usually succeeds.
-  const first = await callNowPlayingOnce();
-  if (first) return first;
-  await new Promise((r) => setTimeout(r, 120));
-  return callNowPlayingOnce();
+  return callMuseOnce();
 }
 
 ipcMain.handle('now-playing', () => runNowPlaying());
@@ -229,10 +171,8 @@ ipcMain.handle('toggle-click-through', () => {
 function resolveWindowProfile(name) {
   const wa = screen.getPrimaryDisplay().workArea; // excludes menubar/dock
   switch (name) {
-    case 'headline': // 520×220 顶居中 — legacy default; aura/wave/typewriter/ink/pop/piano
+    case 'headline': // 520×220 顶居中 — typewriter / ink
       return { width: 520, height: 220, x: wa.x + Math.round(wa.width / 2 - 260), y: wa.y + 60, clickThrough: false };
-    case 'wide':     // 720×240 顶居中 — folio/sleeve/minimal (cover-left or triplet)
-      return { width: 720, height: 240, x: wa.x + Math.round(wa.width / 2 - 360), y: wa.y + 60, clickThrough: false };
     case 'subtitle-strip': // 屏宽×120 贴底 — subtitle theme; click-through so it can't grab
       return { width: wa.width, height: 120, x: wa.x, y: wa.y + wa.height - 140, clickThrough: true };
     case 'card':     // 380×520 右悬 — imsg/duet conversation
@@ -311,42 +251,8 @@ function rebuildTrayMenu() {
       rebuildTrayMenu();
     },
   }));
-  // "按场景切换" — one submenu per kind, with a radio list of all themes
-  // (plus "跟随默认" which clears the rule). Sends { kind, theme } to the
-  // renderer; renderer persists + re-resolves the active theme.
-  const sceneItems = SCENE_KINDS.map((k) => ({
-    label: k.label,
-    submenu: [
-      {
-        label: '跟随默认',
-        type: 'radio',
-        checked: !sceneRules[k.id],
-        click: () => {
-          delete sceneRules[k.id];
-          if (win && !win.isDestroyed()) {
-            win.webContents.send('scene-rule', { kind: k.id, theme: '' });
-          }
-          rebuildTrayMenu();
-        },
-      },
-      { type: 'separator' },
-      ...TRAY_THEMES.map((t) => ({
-        label: t.label,
-        type: 'radio',
-        checked: sceneRules[k.id] === t.name,
-        click: () => {
-          sceneRules[k.id] = t.name;
-          if (win && !win.isDestroyed()) {
-            win.webContents.send('scene-rule', { kind: k.id, theme: t.name });
-          }
-          rebuildTrayMenu();
-        },
-      })),
-    ],
-  }));
   const menu = Menu.buildFromTemplate([
     { label: 'Theme', submenu: themeItems },
-    { label: '按场景切换', submenu: sceneItems },
     { type: 'separator' },
     {
       label: 'Toggle click-through',
@@ -393,15 +299,6 @@ function createTray() {
 ipcMain.on('theme-changed', (_, name) => {
   if (typeof name === 'string' && TRAY_THEMES.some((t) => t.name === name)) {
     currentTheme = name;
-    rebuildTrayMenu();
-  }
-});
-
-// Renderer pushes its rules table on startup so the tray submenu opens with
-// the correct radio marks (otherwise they'd all be empty after a relaunch).
-ipcMain.on('scene-rules-init', (_, rules) => {
-  if (rules && typeof rules === 'object') {
-    sceneRules = rules;
     rebuildTrayMenu();
   }
 });

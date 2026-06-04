@@ -17,8 +17,4 @@ contextBridge.exposeInMainWorld('api', {
   quit: () => ipcRenderer.invoke('quit'),
   reportTheme: (name) => ipcRenderer.send('theme-changed', name),
   onApplyTheme: (cb) => ipcRenderer.on('apply-theme', (_, name) => cb(name)),
-  // Scene-rule channel: tray "按场景切换" submenu sends { kind, theme } here.
-  // theme === '' clears the rule (fall back to default for that kind).
-  onSceneRule: (cb) => ipcRenderer.on('scene-rule', (_, payload) => cb(payload)),
-  reportSceneRules: (rules) => ipcRenderer.send('scene-rules-init', rules),
 });

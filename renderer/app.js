@@ -25,8 +25,7 @@ let state = {
   rate: 1,
   lastSyncAt: 0,
   isLoading: false,     // guard against concurrent lyric fetches
-  nullStreak: 0,        // consecutive null responses from nowplaying-cli
-  trackKind: 'lyrical', // 'lyrical' | 'instrumental' | 'unmatched' — drives auto-switch
+  nullStreak: 0,        // consecutive null responses from muse (idle / down)
   // Last stateVersion we observed from muse. A change means muse flagged a
   // discontinuity (seek / play-pause flip / track change) — we hard-reset
   // the local clock instead of smoothing, so the lyric snaps into place.
@@ -281,11 +280,6 @@ async function pollNowPlaying() {
 
   const np = await window.api.nowPlaying();
 
-  // Source badge — visible only when we're running on nowplaying-cli, where
-  // elapsed is unreliable and lyrics may match the wrong version. Set before
-  // any early return so idle state still reflects the last known source.
-  document.body.dataset.source = np ? (np.source === 'muse' ? 'muse' : 'mediaremote') : 'idle';
-
   if (!np) {
     state.nullStreak++;
     // NetEase regularly stops reporting to macOS Now Playing for a few seconds
@@ -321,28 +315,19 @@ async function pollNowPlaying() {
   const key = fmtTrackKey(np);
 
   if (key === state.trackKey) {
-    // When the source is `muse`, we own the audio element and report a
-    // frame-accurate currentTime — adopt it as the local clock every poll
-    // (also gives us free pause/seek handling).
-    //
-    // Otherwise (nowplaying-cli on the official NetEase client), elapsed
-    // is permanently stuck at 0; ignore it and let tick()'s local clock run.
-    if (np.source === 'muse') {
-      // Anchor to the moment muse sampled currentTime (positionSampledAt),
-      // not to "now". Without this, the 0–1s poll lag shows up as a visible
-      // lyric drift on seek/pause — especially noticeable in stage layouts.
-      // Fall back to "now" if the field is missing (older muse build).
-      const sampledAt = np.positionSampledAt || Date.now();
-      const ageMs = Math.max(0, Date.now() - sampledAt);
-      state.elapsed = np.elapsed;
-      state.lastSyncAt = performance.now() - ageMs;
-      state.rate = np.rate;
-      // Discontinuity: hard-snap to the new position instead of letting the
-      // interpolator drift toward it over the next frame.
-      if (np.stateVersion !== state.stateVersion) {
-        state.stateVersion = np.stateVersion;
-        state.lastIdx = -2;
-      }
+    // muse owns the <audio> element and reports a frame-accurate currentTime —
+    // adopt it as the local clock every poll (free pause/seek handling). Anchor
+    // to the moment muse sampled it (positionSampledAt), not "now", so the
+    // 0–1s poll lag doesn't surface as lyric drift on seek/pause.
+    const sampledAt = np.positionSampledAt || Date.now();
+    const ageMs = Math.max(0, Date.now() - sampledAt);
+    state.elapsed = np.elapsed;
+    state.lastSyncAt = performance.now() - ageMs;
+    state.rate = np.rate;
+    // Discontinuity: hard-snap to the new position instead of drifting toward it.
+    if (np.stateVersion !== state.stateVersion) {
+      state.stateVersion = np.stateVersion;
+      state.lastIdx = -2;
     }
     titleEl.textContent = np.title;
     artistEl.textContent = np.artist ? ' · ' + np.artist : '';
@@ -357,7 +342,7 @@ async function pollNowPlaying() {
   const loadStartRate    = np.rate > 0 ? np.rate : 1;
   const loadStartAt      = performance.now();
 
-  const { lines, cover, kind } = await fetchLyricsFor(np);
+  const { lines, cover } = await fetchLyricsFor(np);
 
   if (state.trackKey !== key) {
     state.isLoading = false;
@@ -367,9 +352,6 @@ async function pollNowPlaying() {
   // Estimate where the song is now: initial elapsed + time spent loading × rate.
   const loadedElapsed = loadStartElapsed + (performance.now() - loadStartAt) / 1000 * loadStartRate;
 
-  state.trackKind = kind;
-  // Kind decides which theme is "effective" — auto-switch on every commit.
-  applyEffectiveTheme();
   commitTrack(np, lines, cover, loadedElapsed, np.rate);
   // Adopt muse's stateVersion at track-commit time so the next same-track
   // poll doesn't spuriously trip the "discontinuity" branch.
@@ -504,29 +486,14 @@ function applyTheme(name) {
 }
 
 function defaultThemeName() {
-  const name = localStorage.getItem('theme') || 'aura';
-  return THEMES.some((t) => t.name === name) ? name : 'aura';
+  const name = localStorage.getItem('theme') || 'typewriter';
+  return THEMES.some((t) => t.name === name) ? name : 'typewriter';
 }
 
-// Auto-switch rules. JSON-encoded { instrumental: 'instrumental', ... }
-// in localStorage 'theme.rules'. Empty / missing slot → fall back to default.
-function loadThemeRules() {
-  try {
-    const raw = JSON.parse(localStorage.getItem('theme.rules') || '{}');
-    return (raw && typeof raw === 'object') ? raw : {};
-  } catch { return {}; }
-}
-function saveThemeRules(rules) {
-  localStorage.setItem('theme.rules', JSON.stringify(rules || {}));
-}
-// Resolve which theme should be active right now given the current track.
-// Order: rule-for-kind → default. Manual selections update the default;
-// "按场景切换" submenu updates rules.
+// The active theme is just the user's persisted pick (or the default). The
+// per-track scene-rule layer (auto-switching by trackKind) was removed along
+// with the themes that used it.
 function effectiveThemeName() {
-  const rules = loadThemeRules();
-  const kind = state.trackKind || 'lyrical';
-  const ruled = rules[kind];
-  if (ruled && THEMES.some((t) => t.name === ruled)) return ruled;
   return defaultThemeName();
 }
 function applyEffectiveTheme() {
@@ -540,9 +507,7 @@ function applyEffectiveTheme() {
 }
 
 // Theme is driven by the macOS tray menu. The renderer persists the user's
-// manual pick as the *default*, then re-resolves the effective theme through
-// the rule layer (which may steer to a different one if the current track
-// matches a rule). Toast only fires on the manual click path.
+// pick and applies it. Toast fires on the manual click path.
 function setAndReportTheme(name) {
   if (!THEMES.some((t) => t.name === name)) return;
   localStorage.setItem('theme', name);
@@ -551,20 +516,6 @@ function setAndReportTheme(name) {
   const t = THEMES.find((x) => x.name === name);
   if (t) showToast(`主题 · ${t.label}`);
 }
-
-// Tray "按场景切换" subitems land here. value = '' clears the rule (fall
-// back to default for that kind). Re-resolve effective theme immediately.
-function setSceneRule(kind, themeName) {
-  const rules = loadThemeRules();
-  if (!themeName) delete rules[kind];
-  else if (THEMES.some((t) => t.name === themeName)) rules[kind] = themeName;
-  saveThemeRules(rules);
-  document.body.dataset.theme = '';
-  applyEffectiveTheme();
-}
-window.api.onSceneRule?.((payload) => {
-  if (payload && typeof payload === 'object') setSceneRule(payload.kind, payload.theme);
-});
 
 window.api.onApplyTheme((name) => setAndReportTheme(name));
 
@@ -594,14 +545,10 @@ window.api.onResetWindow?.((p) => {
   showToast?.('已重置窗口');
 });
 
-// Apply the persisted default theme on startup. trackKind is 'lyrical' until
-// the first track lands, so this just resolves to the default. Wrap so a bad
-// theme entry can't halt the rest of init (poll loop, event listeners).
+// Apply the persisted theme on startup. Wrap so a bad theme entry can't halt
+// the rest of init (poll loop, event listeners).
 try {
   applyEffectiveTheme();
-  // Hand the persisted rules back to main so the tray submenu boots with the
-  // right radio marks. Optional chaining for older preload builds.
-  window.api.reportSceneRules?.(loadThemeRules());
 } catch (e) {
   console.error('[fl:init] applyEffectiveTheme failed', e);
 }
