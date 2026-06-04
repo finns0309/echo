@@ -54,7 +54,3 @@ npm start
 ## 已知坑
 
 - macOS 真·全屏（Spaces 那种）的视频播放器会盖住 echo——这是 `'floating'` 层级的预期代价，换来菜单栏弹层不被歌词遮住
-
-## 与 notch-cat 的联动
-
-`echo` 主进程在 `/tmp/echo.sock` 广播播放状态，[notch-cat](https://github.com/wxtsky/CodeIsland) 移植版小猫蹲在 MacBook 刘海下听到 socket 后会跑到歌词框旁边跟着节拍跳舞。可选，不开启不影响 `echo` 本体。

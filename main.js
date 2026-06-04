@@ -1,9 +1,5 @@
 const { app, BrowserWindow, ipcMain, screen, Menu, Tray, nativeImage } = require('electron');
 const path = require('path');
-const fs = require('fs');
-const net = require('net');
-
-const BROADCAST_SOCK = '/tmp/echo.sock';
 
 const TRAY_THEMES = require('./renderer/themes.js');
 
@@ -11,10 +7,6 @@ let win;
 let tray;
 let clickThrough = false;
 let currentTheme = 'typewriter';
-let broadcastServer;
-let broadcastClients = new Set();
-let broadcastTimer;
-let lastBroadcastKey = '';
 
 function createWindow() {
   const display = screen.getPrimaryDisplay();
@@ -56,8 +48,8 @@ function createWindow() {
     console.log(`[renderer:${tag}] ${message}  (${source}:${line})`);
   });
 
-  win.on('move',   () => { pushState(true); reportBoundsChange(); });
-  win.on('resize', () => { pushState(true); reportBoundsChange(); });
+  win.on('move',   () => reportBoundsChange());
+  win.on('resize', () => reportBoundsChange());
 }
 
 // Phase 2: tell the renderer when the user moves / resizes the window so it
@@ -65,50 +57,15 @@ function createWindow() {
 // triggered by our own setBounds() inside applyWindowProfile; (2) debounce
 // so dragging doesn't spam localStorage writes.
 let suppressBoundsEventUntil = 0;
-let boundsBroadcastTimer = null;
+let boundsReportTimer = null;
 function reportBoundsChange() {
   if (Date.now() < suppressBoundsEventUntil) return;
   if (!currentTheme || !win || win.isDestroyed()) return;
-  clearTimeout(boundsBroadcastTimer);
-  boundsBroadcastTimer = setTimeout(() => {
+  clearTimeout(boundsReportTimer);
+  boundsReportTimer = setTimeout(() => {
     if (!win || win.isDestroyed()) return;
     win.webContents.send('theme-bounds-changed', { name: currentTheme, bounds: win.getBounds() });
   }, 250);
-}
-
-async function pushState(force = false) {
-  if (broadcastClients.size === 0) return;
-  const np = await runNowPlaying();
-  const bounds = win && !win.isDestroyed() ? win.getBounds() : null;
-
-  // muse reports playing state reliably (rate = playing ? 1 : 0).
-  const state = {
-    type: 'state',
-    playing: !!(np && np.title && np.rate > 0),
-    title: np?.title || '',
-    artist: np?.artist || '',
-    bounds,
-  };
-  const key = JSON.stringify(state);
-  if (!force && key === lastBroadcastKey) return;
-  lastBroadcastKey = key;
-  const line = key + '\n';
-  for (const c of broadcastClients) {
-    try { c.write(line); } catch {}
-  }
-}
-
-function startBroadcastServer() {
-  try { fs.unlinkSync(BROADCAST_SOCK); } catch {}
-  broadcastServer = net.createServer((client) => {
-    broadcastClients.add(client);
-    client.on('close', () => broadcastClients.delete(client));
-    client.on('error', () => broadcastClients.delete(client));
-    pushState(true);
-  });
-  broadcastServer.on('error', () => {});
-  broadcastServer.listen(BROADCAST_SOCK);
-  broadcastTimer = setInterval(() => pushState(false), 1000);
 }
 
 // Read the muse player (http://127.0.0.1:10755/now). muse owns the audio
@@ -306,14 +263,7 @@ ipcMain.on('theme-changed', (_, name) => {
 app.whenReady().then(() => {
   createWindow();
   createTray();
-  startBroadcastServer();
   if (process.platform === 'darwin') app.dock?.hide();
-});
-
-app.on('before-quit', () => {
-  if (broadcastTimer) clearInterval(broadcastTimer);
-  try { broadcastServer?.close(); } catch {}
-  try { fs.unlinkSync(BROADCAST_SOCK); } catch {}
 });
 
 app.on('window-all-closed', () => {

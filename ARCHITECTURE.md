@@ -15,7 +15,6 @@ For the now-playing wire protocol between muse and this app, see
 │  · BrowserWindow: transparent, always-on-top, frameless       │
 │  · Tray + right-click menu (theme list)                       │
 │  · runNowPlaying(): read muse /now (muse-only, no fallback)   │
-│  · broadcast {playing,title,artist,bounds} on /tmp/echo.sock  │
 └───────────────────────────────┬───────────────────────────────┘
                                 │ IPC (preload.js → window.api)
                                 ▼
@@ -198,5 +197,3 @@ no muse rebuild needed (muse is a dumb spectrum pipe).
   both load `themes.js`; don't duplicate theme lists anywhere else.
 - **Chrome doesn't scale; lyrics do.** Resist multiplying topbar/button sizes by
   `--fl-scale`.
-- **The `/tmp/echo.sock` broadcast feeds [notch-cat](https://github.com/wxtsky/CodeIsland).**
-  It's echo→notch-cat (not a muse channel); don't remove it thinking it's dead.
