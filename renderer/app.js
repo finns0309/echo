@@ -17,8 +17,6 @@ const stageEl = document.getElementById('stage');
 
 let state = {
   trackKey: '',
-  songId: 0,            // NetEase id of the current track (0 if unknown). Used
-                        // as the cache key for the semantic-motion analysis.
   lines: [],
   lastIdx: -2,
   elapsed: 0,
@@ -32,10 +30,9 @@ let state = {
   stateVersion: -1,
 };
 
-// NetEase's macOS client only emits a Now Playing event on track change —
-// it never updates elapsedTime afterwards (it's stuck at 0 for the entire
-// song). So the only signal we trust from per-poll samples is the track
-// identity. The local wall-clock takes over as soon as the track is loaded.
+// Track identity = title|artist. A change in this key is what triggers a new
+// lyric fetch; within a track, muse's frame-accurate currentTime drives the
+// local clock (see pollNowPlaying), so per-poll we trust muse's elapsed.
 
 function fmtTrackKey(np) {
   return `${np.title}|${np.artist}`;
@@ -140,9 +137,8 @@ function renderAt(t) {
   }
 
   if (usesStage()) {
-    // Pass the whole line so renderStage can stamp karaoke timings on tokens.
-    // Falls back gracefully when chars[] is absent (it always is for the
-    // synthetic placeholder lines below).
+    // Stage themes split the line into per-codepoint spans for the reveal
+    // stagger; pass the line (or '♪' as the between-lines placeholder).
     renderStage(cur || '♪');
     return;
   }
@@ -238,14 +234,12 @@ function commitTrack(np, lines, cover, elapsed, rate) {
   }
 
   state.lines = lines;
-  // Song identity for the semantic-motion cache. Prefer muse's NetEase songId;
-  // fall back to the title|artist track key when it's absent (nowplaying-cli
-  // source) so the cache still keys per-song.
-  state.songId = np.songId || state.trackKey || 0;
   state.lastIdx = -2;
   state.elapsed = elapsed;
   state.lastSyncAt = performance.now();
-  state.rate = 1;
+  // Adopt the track's actual play/pause rate. A track committed while paused
+  // (rate 0) must not advance its local clock until a later poll resumes it.
+  state.rate = rate;
 
   if (!lines.length) {
     if (usesStage()) {
@@ -283,6 +277,14 @@ async function pollNowPlaying() {
       if (usesStage()) {
         stageEl.innerHTML = '';
         renderStage(msg);
+      } else if (document.body.dataset.layout === 'danmaku') {
+        // Clear flying strips so the last lyric doesn't hang as if still playing.
+        const dm = document.getElementById('danmaku');
+        if (dm) dm.innerHTML = '';
+      } else if (document.body.dataset.layout === 'conversation') {
+        // Same: drop the bubble stream so it doesn't read as a live chat.
+        const cs = document.querySelector('#convo .cv-stream');
+        if (cs) cs.innerHTML = '';
       }
       state.trackKey = '';
       state.lines = [];
@@ -358,6 +360,10 @@ function tick() {
 const THEMES = window.FL_THEMES;
 const toastEl = document.getElementById('toast');
 let toastTimer = null;
+// Mouse-passthrough state. Declared above applyTheme because applyTheme writes
+// it (via the applyWindowProfile callback); also read by the pin button, the
+// topbar hover guard, and the override-memory IPC handlers further down.
+let clickThrough = false;
 
 function showToast(msg) {
   toastEl.textContent = msg;
@@ -536,8 +542,6 @@ try {
 } catch (e) {
   console.error('[fl:init] applyEffectiveTheme failed', e);
 }
-
-let clickThrough = false;
 
 // Shared so both manual toggles and theme-profile-driven flips keep the
 // `◌/●` glyph in sync. Function declaration so applyTheme (defined earlier

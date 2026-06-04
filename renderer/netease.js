@@ -7,8 +7,8 @@ const HEADERS = {
 
 // In-memory LRU-ish caches. Two motivations:
 //  - Switching back to a recently-played track should be instant (no network).
-//  - Fallback mode (nowplaying-cli) routinely re-searches the same track when
-//    NetEase briefly stops reporting then resumes — caching dedupes that.
+//  - When muse can't supply a NetEase songId we fall back to a fuzzy
+//    title+artist search; caching dedupes repeated searches for the same track.
 // Bounded by MAX_ENTRIES; oldest key evicted on overflow.
 const MAX_ENTRIES = 128;
 const searchCache = new Map(); // key: `${title}|${artist}` → { id, cover }
@@ -30,15 +30,24 @@ function cacheGet(map, key) {
 // Single retry with a short backoff. Network blips + NetEase's occasional 429
 // make a one-shot fetch unreliable; two tries with a 250ms gap is enough in
 // practice to turn transient failures into successes without stalling the UI.
+// Each attempt is bounded by FETCH_TIMEOUT_MS: a hung connection (captive
+// portal, network switch, CDN stall) would otherwise leave the caller's
+// `state.isLoading` guard stuck true and freeze the whole poll loop with no
+// error and no recovery.
+const FETCH_TIMEOUT_MS = 5000;
 async function fetchJSON(url) {
   for (let attempt = 0; attempt < 2; attempt++) {
+    const ctrl = new AbortController();
+    const tid = setTimeout(() => ctrl.abort(), FETCH_TIMEOUT_MS);
     try {
-      const r = await fetch(url, { headers: HEADERS });
+      const r = await fetch(url, { headers: HEADERS, signal: ctrl.signal });
       if (!r.ok) throw new Error('http ' + r.status);
       return await r.json();
     } catch (e) {
       if (attempt === 1) throw e;
       await new Promise((res) => setTimeout(res, 250));
+    } finally {
+      clearTimeout(tid);
     }
   }
 }

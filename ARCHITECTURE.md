@@ -38,7 +38,7 @@ in a sibling module.
 |------|---------|------|
 | `app.js` | — | Orchestration: poll loop, local clock (`tick`), lyric fetch, `renderStage`/`renderAt`, accent extraction, `applyTheme`, window-override memory, responsive scale. |
 | `themes.js` | `FL_THEMES` | Theme registry — the single source of truth (also `require`d by main for the tray). |
-| `lrc.js` | `LRC` | LRC / yrc parsing → unified per-line karaoke model. |
+| `lrc.js` | `LRC` | LRC parsing → sorted line-level model (`parseLRC`) + active-line lookup (`findIndex`). |
 | `netease.js` | `Netease` | Search by title+artist, fetch LRC + cover. LRU-cached. |
 | `fx.js` | `FL_FX` | WebGL shader layer (`plasma`). `start/stop/setColors/pulse`. |
 | `conversation.js` | `FL_CONVO` | Chat-bubble stream (imsg). |
@@ -48,7 +48,7 @@ in a sibling module.
 ### Data flow
 
 ```
-pollNowPlaying (800ms) ──new track?──▶ fetchLyricsFor (songId → netease) → LRC.buildKaraoke
+pollNowPlaying (800ms) ──new track?──▶ fetchLyricsFor (songId → netease) → LRC.parseLRC
                                             │
                                   applyEffectiveTheme → commitTrack
                                             │
