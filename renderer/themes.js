@@ -107,6 +107,64 @@ const THEMES = [
     },
   },
 
+  // ---------- stage · ember (WebGL rising-fire fbm) ----------
+  {
+    name: 'ember', label: '余烬', window: 'ambient',
+    layout: 'stage', reveal: 'wave', fx: 'ember',
+    tokens: {
+      // Bg matches the shader's near-black base so any uncovered edge blends.
+      '--fl-bg-color':     '#0a0200',
+      '--fl-bg-image':     'none',
+      '--fl-bg-scale':     '1',
+      // Top-weighted vignette + faint scanline; the fire already darkens upward
+      // so the lyric near center sits over the hottest, most legible band.
+      '--fl-tint-image': `
+        radial-gradient(ellipse 130% 100% at 50% 60%, transparent 45%, rgba(0,0,0,0.5) 100%),
+        repeating-linear-gradient(0deg, rgba(0,0,0,0.04) 0 1px, transparent 1px 3px)`,
+      '--fl-text-color':   '#fff7ec',
+      '--fl-text-weight':  '750',
+      '--fl-text-size':    '32px',
+      '--fl-letter-spacing':'0.4px',
+      // Warm-dark shadow so white text stays readable over orange/white flame.
+      '--fl-text-shadow': `
+        0 2px 10px rgba(40,8,0,0.85),
+        0 0 22px rgba(0,0,0,0.55),
+        0 0 44px rgba(255,120,30,0.35)`,
+      '--fl-chrome-bg':     'rgba(30,10,2,0.5)',
+      '--fl-chrome-fg':     '#fff7ec',
+      '--fl-chrome-border': 'rgba(255,160,80,0.18)',
+      '--fl-chrome-artist': 'rgba(255,240,225,0.6)',
+    },
+  },
+
+  // ---------- stage · hyperspace (WebGL radial star-streaks) ----------
+  {
+    name: 'warp', label: '曲速', window: 'ambient',
+    layout: 'stage', reveal: 'wave', fx: 'warp',
+    tokens: {
+      '--fl-bg-color':     '#000005',
+      '--fl-bg-image':     'none',
+      '--fl-bg-scale':     '1',
+      // Strong center-out vignette concentrates the streaks and keeps the
+      // bright warp core from washing out the centered lyric.
+      '--fl-tint-image': `
+        radial-gradient(ellipse 90% 80% at 50% 50%, rgba(0,0,0,0.35) 0%, transparent 35%, rgba(0,0,0,0.5) 100%),
+        repeating-linear-gradient(0deg, rgba(255,255,255,0.015) 0 1px, transparent 1px 3px)`,
+      '--fl-text-color':   '#ffffff',
+      '--fl-text-weight':  '700',
+      '--fl-text-size':    '32px',
+      '--fl-letter-spacing':'0.6px',
+      '--fl-text-shadow': `
+        0 2px 14px rgba(0,0,0,0.7),
+        0 0 26px rgba(0,0,0,0.5),
+        0 0 52px var(--accent-glow)`,
+      '--fl-chrome-bg':     'rgba(4,4,18,0.5)',
+      '--fl-chrome-fg':     '#fff',
+      '--fl-chrome-border': 'rgba(255,255,255,0.14)',
+      '--fl-chrome-artist': 'rgba(255,255,255,0.58)',
+    },
+  },
+
   // ---------- single · subtitle (desktop subtitle strip) ----------
   {
     name: 'subtitle', label: '字幕', window: 'subtitle-strip',

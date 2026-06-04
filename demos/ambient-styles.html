@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>echo · 环境主题探索 / ambient styles</title>
+<style>
+  :root { --ui: rgba(255,255,255,0.82); --dim: rgba(255,255,255,0.45); }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; overflow: hidden;
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", system-ui, sans-serif;
+    background: #000; color: var(--ui); }
+  #stage { position: fixed; inset: 0; }
+  canvas { width: 100%; height: 100%; display: block; }
+
+  /* lyric mock — proves text legibility over each style */
+  #lyric { position: fixed; left: 50%; top: 50%; transform: translate(-50%,-50%);
+    text-align: center; pointer-events: none; transition: opacity .4s; z-index: 5;
+    text-shadow: 0 2px 12px rgba(0,0,0,.55), 0 0 24px rgba(0,0,0,.4); }
+  #lyric .line { font-size: 34px; font-weight: 700; letter-spacing: .5px; }
+  #lyric .sub  { font-size: 15px; font-weight: 500; opacity: .6; margin-top: 8px; }
+  body.hide-lyric #lyric { opacity: 0; }
+
+  /* control panel */
+  #panel { position: fixed; top: 18px; left: 18px; width: 252px; z-index: 10;
+    background: rgba(14,14,20,0.58); backdrop-filter: blur(22px) saturate(1.4);
+    -webkit-backdrop-filter: blur(22px) saturate(1.4);
+    border: 1px solid rgba(255,255,255,0.1); border-radius: 16px; padding: 14px;
+    box-shadow: 0 18px 50px rgba(0,0,0,.5); transition: transform .3s, opacity .3s; }
+  body.hide-ui #panel { transform: translateX(-300px); opacity: 0; }
+  #panel h1 { font-size: 12px; font-weight: 700; letter-spacing: .8px; text-transform: uppercase;
+    color: var(--dim); margin-bottom: 4px; }
+  #panel .hint { font-size: 11px; color: var(--dim); line-height: 1.5; margin-bottom: 12px; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .styleBtn { appearance: none; border: 1px solid rgba(255,255,255,0.12); background: rgba(255,255,255,0.04);
+    color: var(--ui); border-radius: 10px; padding: 8px 6px; font-size: 12px; cursor: pointer;
+    text-align: left; line-height: 1.2; transition: all .15s; }
+  .styleBtn:hover { background: rgba(255,255,255,0.1); }
+  .styleBtn.active { background: rgba(255,255,255,0.16); border-color: rgba(255,255,255,0.5); }
+  .styleBtn .en { display: block; font-size: 9px; color: var(--dim); margin-top: 2px; letter-spacing: .3px; }
+  .row { display: flex; align-items: center; gap: 8px; margin-top: 12px; font-size: 12px; color: var(--ui); }
+  .row label { flex: 1; color: var(--dim); }
+  input[type=range] { flex: 1.2; accent-color: #fff; }
+  input[type=color] { width: 30px; height: 24px; border: none; border-radius: 6px; background: none; cursor: pointer; }
+  .toggle { display: flex; align-items: center; gap: 6px; cursor: pointer; }
+  .divider { height: 1px; background: rgba(255,255,255,0.08); margin: 12px 0; }
+  #desc { position: fixed; bottom: 18px; left: 18px; z-index: 10; max-width: 420px;
+    font-size: 12px; color: var(--dim); line-height: 1.6; transition: opacity .3s; }
+  body.hide-ui #desc { opacity: 0; }
+  #desc b { color: var(--ui); font-weight: 600; }
+  kbd { background: rgba(255,255,255,0.12); border-radius: 4px; padding: 1px 5px; font-size: 10px;
+    font-family: ui-monospace, Menlo, monospace; }
+  #hud { position: fixed; top: 18px; right: 18px; z-index: 10; font-size: 11px; color: var(--dim);
+    text-align: right; line-height: 1.7; transition: opacity .3s; }
+  body.hide-ui #hud { opacity: 0; }
+</style>
+</head>
+<body>
+  <div id="stage"><canvas id="gl"></canvas></div>
+
+  <div id="lyric">
+    <div class="line" id="lyricLine">音乐停了，画面还在呼吸</div>
+    <div class="sub" id="lyricSub">echo · ambient desktop ornament</div>
+  </div>
+
+  <div id="panel">
+    <h1>环境主题探索</h1>
+    <div class="hint">每种风格都<b style="color:var(--ui)">无需音乐自维持流动</b>。打开「模拟节拍」可预览有歌词/音乐时的脉冲增强。</div>
+    <div class="grid" id="styleGrid"></div>
+
+    <div class="row">
+      <label>封面主色</label>
+      <input type="color" id="accent" value="#e83c84" />
+    </div>
+    <div class="row">
+      <label>流动速度</label>
+      <input type="range" id="speed" min="0" max="3" step="0.05" value="1" />
+    </div>
+    <div class="divider"></div>
+    <div class="row">
+      <span class="toggle"><input type="checkbox" id="autoPulse" /> 模拟节拍</span>
+      <span class="toggle"><input type="checkbox" id="showLyric" checked /> 歌词</span>
+    </div>
+    <div class="row" style="margin-top:8px">
+      <button class="styleBtn" id="pulseBtn" style="flex:1;text-align:center">手动脉冲一下 (空格)</button>
+    </div>
+  </div>
+
+  <div id="hud">
+    <div id="fps">– fps</div>
+    <div>← → 切换 · <kbd>H</kbd> 隐藏 UI · <kbd>L</kbd> 歌词</div>
+  </div>
+
+  <div id="desc"><b id="descTitle"></b> — <span id="descText"></span></div>
+
+<script>
+// ─────────────────────────────────────────────────────────────────────
+// Shared GLSL prelude: stable hash (Hoskins) + value-noise fbm.
+// Every style is a fragment shader driven by three uniforms, exactly like
+// echo's renderer/fx.js:
+//   uTime   — accumulated *phase* (advances every frame; beat speeds it up)
+//   uBeat   — 0..1 pulse, decays each frame; bumped on each lyric/onset
+//   uAccent — vivid RGB from the album cover (0..1)
+// The whole point: with no music, uBeat stays 0 but uTime keeps advancing,
+// so the field is always alive.
+const PRELUDE = `
+precision highp float;
+uniform vec2  uRes;
+uniform float uTime;
+uniform float uBeat;
+uniform vec3  uAccent;
+float hash21(vec2 p){ vec3 p3=fract(vec3(p.xyx)*0.1031); p3+=dot(p3,p3.yzx+33.33); return fract((p3.x+p3.y)*p3.z); }
+float noise(vec2 p){ vec2 i=floor(p),f=fract(p);
+  float a=hash21(i),b=hash21(i+vec2(1.,0.)),c=hash21(i+vec2(0.,1.)),d=hash21(i+vec2(1.,1.));
+  vec2 u=f*f*(3.-2.*f); return mix(mix(a,b,u.x),mix(c,d,u.x),u.y); }
+float fbm(vec2 p){ float v=0.,a=.5; for(int i=0;i<5;i++){ v+=a*noise(p); p*=2.; a*=.5; } return v; }
+mat2 rot(float a){ float c=cos(a),s=sin(a); return mat2(c,-s,s,c); }
+`;
+
+const VERT = `attribute vec2 aPos; void main(){ gl_Position=vec4(aPos,0.,1.); }`;
+
+// ─── the styles ──────────────────────────────────────────────────────
+const STYLES = [
+  { id:'plasma', cn:'流体', en:'plasma',
+    desc:'原版：域扭曲 fbm，固定靛蓝→封面色→青白调色板。这是你喜欢的基准。',
+    frag:`void main(){
+      vec2 uv=gl_FragCoord.xy/uRes; float a=uRes.x/uRes.y;
+      vec2 p=vec2(uv.x*a,uv.y)*4.0; float t=uTime;
+      vec2 q=vec2(fbm(p+t),fbm(p+vec2(5.2,1.3)-t));
+      vec2 r=vec2(fbm(p+3.5*q+vec2(1.7,9.2)+t*1.2),fbm(p+3.5*q+vec2(8.3,2.8)-t*0.9));
+      float f=fbm(p+3.0*r); f=smoothstep(0.25,0.85,f);
+      vec3 DARK=vec3(0.10,0.04,0.28),HOT=vec3(0.55,1.0,1.0);
+      vec3 col=mix(DARK,uAccent,f); col=mix(col,HOT,clamp(r.x,0.,1.)*0.65); col*=0.6+0.55*f;
+      vec2 c=uv-0.5; c.x*=a; col*=1.0-dot(c,c)*0.4;
+      gl_FragColor=vec4(col,1.0);
+    }`},
+
+  { id:'aurora', cn:'极光', en:'aurora',
+    desc:'纵向流动的光幕，噪声扭曲的极光带在星空前缓缓摆动。安静、催眠，适合夜里挂着。',
+    frag:`void main(){
+      vec2 uv=gl_FragCoord.xy/uRes; float a=uRes.x/uRes.y;
+      vec2 p=vec2(uv.x*a,uv.y); float t=uTime*1.4;
+      vec3 col=vec3(0.01,0.02,0.06);
+      for(int i=0;i<4;i++){ float fi=float(i);
+        float x=p.x*1.4 + fbm(vec2(p.x*2.0+fi*9.0, t*0.4+fi))*1.4;
+        float band=sin(x*3.1415 + t*0.7 + fi*1.7)*0.5+0.5;
+        float h=p.y + fbm(vec2(p.x*3.0+fi*4.0, t*0.5))*0.35 - 0.15;
+        float glow=pow(band,2.0)*smoothstep(1.05,0.15,h)*smoothstep(-0.05,0.45,h);
+        vec3 c=mix(uAccent, vec3(0.2,1.0,0.55), fi*0.28);
+        col += c*glow*(0.4+0.4*uBeat);
+      }
+      float st=step(0.994,hash21(floor(uv*vec2(200.0*a,200.0))));
+      col += st*0.6*smoothstep(0.25,1.0,uv.y);
+      gl_FragColor=vec4(col,1.0);
+    }`},
+
+  { id:'ember', cn:'余烬', en:'ember',
+    desc:'不断上升的炭火噪声，黑→暗红→橙金，偶尔迸出火星。和流体的冷调形成冷暖对照。',
+    frag:`void main(){
+      vec2 uv=gl_FragCoord.xy/uRes; float a=uRes.x/uRes.y;
+      vec2 p=vec2(uv.x*a,uv.y)*3.0; p.y -= uTime*2.2;
+      float f=fbm(p+fbm(p*0.5+uTime*0.8)*1.6); f=pow(f,1.4);
+      vec3 cDark=uAccent*0.06, cMid=uAccent*1.1, cHot=mix(uAccent,vec3(1.0,0.95,0.85),0.7);
+      vec3 col=mix(cDark,cMid,smoothstep(0.20,0.60,f));
+      col=mix(col,cHot,smoothstep(0.60,0.88,f));
+      col=mix(col,vec3(1.0,0.96,0.88),smoothstep(0.88,1.0,f));
+      float spk=step(0.9,fbm(p*1.6+vec2(0.0,uTime*5.0)))*smoothstep(0.55,1.0,f);
+      col += spk*mix(vec3(1.0,0.85,0.6),vec3(1.0),0.4)*(0.6+uBeat);
+      col *= 1.0 - uv.y*0.35;
+      gl_FragColor=vec4(col,1.0);
+    }`},
+
+  { id:'caustics', cn:'水光', en:'caustics',
+    desc:'泳池底的焦散光网，三层迭代折射不断游动。明亮通透，像阳光透过水面。',
+    frag:`void main(){
+      vec2 uv=gl_FragCoord.xy/uRes; float a=uRes.x/uRes.y;
+      vec2 p=vec2(uv.x*a,uv.y)*5.0; float t=uTime*1.4;
+      float c=0.0; vec2 q=p;
+      for(int i=0;i<3;i++){ q += vec2(fbm(q+t), fbm(q.yx-t)); c += abs(sin(q.x)*cos(q.y)); }
+      c/=3.0; c=pow(1.0-c,2.2);
+      vec3 col=vec3(0.0,0.12,0.32) + uAccent*c*1.4 + vec3(0.6,0.95,1.0)*pow(c,3.0)*(0.6+uBeat);
+      gl_FragColor=vec4(col,1.0);
+    }`},
+
+  { id:'nebula', cn:'星云', en:'nebula',
+    desc:'缓慢漂移的彩色气体云 + 多层闪烁星点。深空感，几乎静止，最适合长时间挂在桌面。',
+    frag:`void main(){
+      vec2 uv=gl_FragCoord.xy/uRes; float a=uRes.x/uRes.y;
+      vec2 p=vec2(uv.x*a,uv.y)*3.0; vec2 dr=vec2(uTime*0.18,uTime*0.07);
+      float n=fbm(p+dr+fbm(p*0.5+dr)*2.0);
+      float n2=fbm(p*1.6-dr*1.3);
+      vec3 col=vec3(0.01,0.01,0.03);
+      col += uAccent*pow(n,2.2)*1.3;
+      col += vec3(0.45,0.12,0.55)*pow(n2,3.0)*0.9;
+      vec2 sg=floor(uv*vec2(uRes.x,uRes.y)/2.5);
+      float s=hash21(sg); float tw=0.5+0.5*sin(uTime*4.0+s*40.0);
+      col += step(0.991,s)*tw;
+      col += step(0.9975,hash21(sg+7.3))*tw*vec3(0.7,0.85,1.0)*1.4;
+      gl_FragColor=vec4(col,1.0);
+    }`},
+
+  { id:'synth', cn:'霓虹网格', en:'synthwave',
+    desc:'透视网格地平线 + 条纹落日，复古赛博风。网格随时间向你涌来。',
+    frag:`void main(){
+      vec2 uv=gl_FragCoord.xy/uRes; vec3 col;
+      if(uv.y>0.46){
+        vec3 sky=mix(vec3(0.12,0.0,0.22),vec3(0.45,0.06,0.32),smoothstep(0.46,1.0,uv.y));
+        float d=distance(vec2(uv.x*(uRes.x/uRes.y),uv.y),vec2(0.5*(uRes.x/uRes.y),0.74));
+        float sun=smoothstep(0.2,0.19,d);
+        float stripe=step(0.45,fract((uv.y-0.55)*46.0));
+        sun *= (uv.y>0.74)?1.0:stripe;
+        vec3 sunc=mix(vec3(1.0,0.85,0.2),vec3(1.0,0.2,0.5),smoothstep(0.55,0.9,uv.y));
+        col=mix(sky,sunc,sun);
+        col += uAccent*0.04;
+      } else {
+        float z=0.16/(0.46-uv.y);
+        float x=(uv.x-0.5)*z*7.0;
+        float depth=z*5.0 - uTime*3.0;
+        float dx=0.5-abs(fract(x)-0.5);
+        float dz=0.5-abs(fract(depth)-0.5);
+        float g=min(dx,dz);
+        float glow=smoothstep(0.06,0.0,g);
+        col=mix(vec3(0.03,0.0,0.08), uAccent*1.3, glow*(0.7+uBeat*0.6));
+        col *= smoothstep(0.46,0.2,uv.y)*1.2 + 0.15;
+      }
+      gl_FragColor=vec4(col,1.0);
+    }`},
+
+  { id:'metaball', cn:'熔岩灯', en:'lava lamp',
+    desc:'经典熔岩灯：几个软融的色团缓慢上下漂浮、彼此吞并。极度放松。',
+    frag:`void main(){
+      vec2 uv=gl_FragCoord.xy/uRes; float a=uRes.x/uRes.y;
+      vec2 p=vec2(uv.x*a,uv.y); float t=uTime*1.1;
+      float v=0.0;
+      for(int i=0;i<5;i++){ float fi=float(i);
+        vec2 c=vec2(0.5*a+sin(t*0.6+fi*1.3)*0.55*a, 0.5+cos(t*0.5+fi*2.1)*0.42);
+        float r=0.16+0.06*sin(t+fi*2.0);
+        v += r*r/dot(p-c,p-c);
+      }
+      float m=smoothstep(0.8,1.25,v);
+      vec3 col=mix(vec3(0.03,0.02,0.06), uAccent, m);
+      col=mix(col,vec3(1.0),smoothstep(1.4,2.2,v)*0.4);
+      col += smoothstep(0.7,0.85,v)*smoothstep(0.95,0.8,v)*uAccent*0.6*(0.6+uBeat);
+      gl_FragColor=vec4(col,1.0);
+    }`},
+
+  { id:'ink', cn:'墨', en:'ink wash',
+    desc:'宣纸上缓慢晕开的墨色湍流，封面色微微沁入。安静的水墨呼吸，浅色系唯一。',
+    frag:`void main(){
+      vec2 uv=gl_FragCoord.xy/uRes; float a=uRes.x/uRes.y;
+      vec2 p=vec2(uv.x*a,uv.y)*3.0; float t=uTime*0.5;
+      vec2 q=vec2(fbm(p+t),fbm(p-t+5.0));
+      float f=fbm(p+q*3.0); f=smoothstep(0.28,0.72,f);
+      vec3 paper=vec3(0.94,0.91,0.84);
+      vec3 ink=mix(vec3(0.05,0.05,0.08), uAccent*0.55, 0.35);
+      vec3 col=mix(paper, ink, f*(0.85+0.3*uBeat));
+      float grain=hash21(floor(uv*uRes*0.7))*0.03;
+      col -= grain;
+      gl_FragColor=vec4(col,1.0);
+    }`},
+
+  { id:'ripple', cn:'声呐', en:'sonar',
+    desc:'从中心持续扩散的同心波 + 每隔几秒自动发一圈强脉冲（无音乐也"活着"）。换歌时脉冲会更强。',
+    frag:`void main(){
+      vec2 uv=gl_FragCoord.xy/uRes; float a=uRes.x/uRes.y;
+      vec2 c=uv-0.5; c.x*=a; float d=length(c);
+      vec3 col=vec3(0.02,0.04,0.08);
+      float rings=sin(d*34.0 - uTime*4.0)*0.5+0.5;
+      col += uAccent*pow(rings,3.0)*smoothstep(0.75,0.0,d)*0.7;
+      float ph=fract(uTime*0.25);
+      float pr=ph*1.1;
+      float ring=smoothstep(0.035,0.0,abs(d-pr))*(1.0-ph);
+      col += (vec3(1.0)*0.5 + uAccent)*ring*(0.7+uBeat);
+      float beatRing=smoothstep(0.05,0.0,abs(d-uBeat*1.2))*uBeat;
+      col += uAccent*beatRing;
+      gl_FragColor=vec4(col,1.0);
+    }`},
+
+  { id:'mesh', cn:'渐变网格', en:'gradient mesh',
+    desc:'几个柔和的色团做反距离插值，像 Apple/visionOS 的呼吸渐变。极简、永远好看。',
+    frag:`void main(){
+      vec2 uv=gl_FragCoord.xy/uRes; float a=uRes.x/uRes.y; vec2 p=vec2(uv.x*a,uv.y);
+      float t=uTime*0.9; vec3 col=vec3(0.0); float wsum=0.0;
+      vec3 cols[4];
+      cols[0]=uAccent; cols[1]=vec3(0.18,0.4,1.0); cols[2]=vec3(1.0,0.32,0.6); cols[3]=vec3(0.25,0.95,0.8);
+      for(int i=0;i<4;i++){ float fi=float(i);
+        vec2 c=vec2(0.5*a+sin(t*0.5+fi*1.7)*0.42*a, 0.5+cos(t*0.4+fi*2.3)*0.42);
+        float w=1.0/(0.015+distance(p,c)); w=pow(w,1.6);
+        col += cols[i]*w; wsum += w;
+      }
+      col/=wsum; col*=0.92+0.18*uBeat;
+      gl_FragColor=vec4(col,1.0);
+    }`},
+
+  { id:'topo', cn:'等高线', en:'topographic',
+    desc:'噪声高度场画出的等高线，整体缓慢起伏推移。地图/科学感，线条干净。',
+    frag:`void main(){
+      vec2 uv=gl_FragCoord.xy/uRes; float a=uRes.x/uRes.y; vec2 p=vec2(uv.x*a,uv.y)*4.0;
+      float h=fbm(p+vec2(uTime*0.3,uTime*0.15));
+      vec3 bg=mix(vec3(0.02,0.03,0.07), uAccent*0.45, h);
+      float k=h*14.0; float line=abs(fract(k)-0.5)*2.0;
+      float contour=smoothstep(0.86,1.0,line);
+      float major=smoothstep(0.92,1.0,abs(fract(h*4.0)-0.5)*2.0);
+      vec3 col=mix(bg, uAccent, contour*0.7);
+      col=mix(col, vec3(1.0), major*0.5*(0.6+uBeat));
+      gl_FragColor=vec4(col,1.0);
+    }`},
+
+  { id:'warp', cn:'曲速', en:'hyperspace',
+    desc:'从中心放射的星流条纹，向外奔涌的曲速感。节拍来时加速冲刺。',
+    frag:`void main(){
+      vec2 uv=gl_FragCoord.xy/uRes; float a=uRes.x/uRes.y;
+      vec2 c=uv-0.5; c.x*=a; float ang=atan(c.y,c.x); float rad=length(c);
+      // acceleration comes from uTime (phase) speeding up on beat — NOT from
+      // adding/multiplying uBeat into t (that shifts position → snaps back).
+      float t=uTime*4.0;
+      float streak=fbm(vec2(ang*7.0, rad*5.0 - t));
+      float s2=fbm(vec2(ang*13.0+5.0, rad*8.0 - t*1.4));
+      vec3 col=mix(vec3(0.0,0.0,0.02), uAccent, smoothstep(0.5,0.85,streak));
+      col += vec3(1.0)*smoothstep(0.82,1.0,s2)*smoothstep(0.0,0.35,rad);
+      col *= smoothstep(0.0,0.12,rad);
+      col += uAccent*smoothstep(0.12,0.0,rad)*(1.5+uBeat*1.6);
+      col *= 1.0+uBeat*0.25;
+      gl_FragColor=vec4(col,1.0);
+    }`},
+];
+
+// ─── WebGL plumbing ──────────────────────────────────────────────────
+const canvas = document.getElementById('gl');
+const gl = canvas.getContext('webgl', { alpha:false, antialias:false });
+const RES_SCALE = 0.6;
+
+function compile(src, type){
+  const s=gl.createShader(type); gl.shaderSource(s,src); gl.compileShader(s);
+  if(!gl.getShaderParameter(s,gl.COMPILE_STATUS)){ console.error(gl.getShaderInfoLog(s)); return null; }
+  return s;
+}
+function buildProgram(fragBody){
+  const fs=compile(PRELUDE+'\n'+fragBody, gl.FRAGMENT_SHADER);
+  const vs=compile(VERT, gl.VERTEX_SHADER);
+  if(!fs||!vs) return null;
+  const p=gl.createProgram(); gl.attachShader(p,vs); gl.attachShader(p,fs); gl.linkProgram(p);
+  if(!gl.getProgramParameter(p,gl.LINK_STATUS)){ console.error(gl.getProgramInfoLog(p)); return null; }
+  return p;
+}
+// shared fullscreen triangle pair
+const buf=gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER,buf);
+gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,1,-1,-1,1,-1,1,1,-1,1,1]),gl.STATIC_DRAW);
+
+// compile all up front; remember which failed
+const progs={};
+for(const st of STYLES){
+  const p=buildProgram(st.frag);
+  if(p){ const aPos=gl.getAttribLocation(p,'aPos');
+    progs[st.id]={ p, aPos,
+      uTime:gl.getUniformLocation(p,'uTime'), uRes:gl.getUniformLocation(p,'uRes'),
+      uBeat:gl.getUniformLocation(p,'uBeat'), uAccent:gl.getUniformLocation(p,'uAccent') };
+  } else { progs[st.id]=null; }
+}
+
+function resize(){
+  const w=Math.max(1,Math.floor(innerWidth*RES_SCALE)), h=Math.max(1,Math.floor(innerHeight*RES_SCALE));
+  if(canvas.width!==w||canvas.height!==h){ canvas.width=w; canvas.height=h; gl.viewport(0,0,w,h); }
+}
+addEventListener('resize', resize); resize();
+
+// ─── state ───────────────────────────────────────────────────────────
+let current = STYLES[0].id;
+let phase = 0, beat = 0, last = 0, speedMul = 1;
+let accent = [0.91,0.24,0.52];
+let frames = 0, fpsLast = 0;
+
+function hexToRGB(h){ const n=parseInt(h.slice(1),16); return [((n>>16)&255)/255,((n>>8)&255)/255,(n&255)/255]; }
+
+function loop(now){
+  requestAnimationFrame(loop);
+  const dt = last ? Math.min(0.05,(now-last)/1000) : 0.016; last=now;
+  // phase advances every frame — this is what keeps the field alive with no music
+  phase += dt * (0.28 + beat*1.6) * speedMul;
+  beat *= 0.93;
+  if(autoPulse.checked && now - lastAuto > 1400){ pulse(0.7); lastAuto = now; cycleLyric(); }
+
+  const g = progs[current];
+  resize();
+  if(g){
+    gl.useProgram(g.p);
+    gl.bindBuffer(gl.ARRAY_BUFFER,buf);
+    gl.enableVertexAttribArray(g.aPos); gl.vertexAttribPointer(g.aPos,2,gl.FLOAT,false,0,0);
+    gl.uniform1f(g.uTime, phase);
+    gl.uniform1f(g.uBeat, beat);
+    gl.uniform2f(g.uRes, canvas.width, canvas.height);
+    gl.uniform3f(g.uAccent, accent[0],accent[1],accent[2]);
+    gl.drawArrays(gl.TRIANGLES,0,6);
+  }
+  // fps
+  frames++; if(now-fpsLast>500){ document.getElementById('fps').textContent=Math.round(frames*1000/(now-fpsLast))+' fps'; frames=0; fpsLast=now; }
+}
+function pulse(amt){ beat=Math.min(1, beat+(amt||0.65)); }
+
+// ─── lyric mock cycling ──────────────────────────────────────────────
+const LYRICS=[
+  ['音乐停了，画面还在呼吸','echo · ambient desktop ornament'],
+  ['City lights, blurred into rain','— demo line'],
+  ['让风替我说完这句话','— demo line'],
+  ['Hold the night a little longer','— demo line'],
+  ['霓虹熄灭之前再看一眼','— demo line'],
+];
+let li=0;
+function cycleLyric(){ li=(li+1)%LYRICS.length; document.getElementById('lyricLine').textContent=LYRICS[li][0]; document.getElementById('lyricSub').textContent=LYRICS[li][1]; }
+
+// ─── UI wiring ───────────────────────────────────────────────────────
+const grid=document.getElementById('styleGrid');
+STYLES.forEach(st=>{
+  const b=document.createElement('button'); b.className='styleBtn'+(st.id===current?' active':'');
+  b.innerHTML=`${st.cn}<span class="en">${st.en}</span>`; b.dataset.id=st.id;
+  if(!progs[st.id]){ b.style.opacity=.4; b.title='shader 编译失败'; }
+  b.onclick=()=>setStyle(st.id);
+  grid.appendChild(b);
+});
+function setStyle(id){
+  current=id;
+  [...grid.children].forEach(c=>c.classList.toggle('active',c.dataset.id===id));
+  const st=STYLES.find(s=>s.id===id);
+  document.getElementById('descTitle').textContent=`${st.cn} / ${st.en}`;
+  document.getElementById('descText').textContent=st.desc;
+  pulse(0.5);
+}
+const accentEl=document.getElementById('accent');
+accentEl.oninput=()=>accent=hexToRGB(accentEl.value); accent=hexToRGB(accentEl.value);
+document.getElementById('speed').oninput=e=>speedMul=parseFloat(e.target.value);
+const autoPulse=document.getElementById('autoPulse'); let lastAuto=0;
+document.getElementById('pulseBtn').onclick=()=>pulse();
+document.getElementById('showLyric').onchange=e=>document.body.classList.toggle('hide-lyric',!e.target.checked);
+
+addEventListener('keydown',e=>{
+  if(e.key==='ArrowRight'||e.key==='ArrowDown'){ const i=STYLES.findIndex(s=>s.id===current); setStyle(STYLES[(i+1)%STYLES.length].id); }
+  if(e.key==='ArrowLeft'||e.key==='ArrowUp'){ const i=STYLES.findIndex(s=>s.id===current); setStyle(STYLES[(i-1+STYLES.length)%STYLES.length].id); }
+  if(e.key===' '){ e.preventDefault(); pulse(); cycleLyric(); }
+  if(e.key.toLowerCase()==='h'){ document.body.classList.toggle('hide-ui'); }
+  if(e.key.toLowerCase()==='l'){ const c=document.getElementById('showLyric'); c.checked=!c.checked; c.onchange({target:c}); }
+});
+
+setStyle(current);
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>

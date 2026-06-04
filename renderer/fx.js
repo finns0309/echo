@@ -98,7 +98,80 @@ void main() {
   gl_FragColor = vec4(col, 1.0);
 }`;
 
-const SHADERS = { plasma: FRAG_PLASMA };
+// Ember: rising charcoal-fire fbm. Black → deep red → orange → near-white,
+// with occasional sparks. Cover color tints the whole field warm via uAccent
+// (normalized so a muddy cover still reads as a hue, not a brightness shift).
+// uTime is the beat-modulated phase, same as plasma — so the fire keeps rising
+// with no music, and a line change briefly speeds the rise + brightens sparks.
+const FRAG_EMBER = `
+precision highp float;
+uniform vec2  uRes;
+uniform float uTime;
+uniform float uBeat;
+uniform vec3  uAccent;
+float hash(vec2 p){ vec3 p3=fract(vec3(p.xyx)*0.1031); p3+=dot(p3,p3.yzx+33.33); return fract((p3.x+p3.y)*p3.z); }
+float noise(vec2 p){ vec2 i=floor(p),f=fract(p);
+  float a=hash(i),b=hash(i+vec2(1.,0.)),c=hash(i+vec2(0.,1.)),d=hash(i+vec2(1.,1.));
+  vec2 u=f*f*(3.-2.*f); return mix(mix(a,b,u.x),mix(c,d,u.x),u.y); }
+float fbm(vec2 p){ float v=0.,a=.5; for(int i=0;i<4;i++){ v+=a*noise(p); p*=2.; a*=.5; } return v; }
+void main(){
+  vec2 uv=gl_FragCoord.xy/uRes; float asp=uRes.x/uRes.y;
+  vec2 p=vec2(uv.x*asp,uv.y)*3.0; p.y -= uTime*2.2;
+  float f=fbm(p+fbm(p*0.5+uTime*0.8)*1.6); f=pow(f,1.4);
+  // Cover color drives the flame body (same idea as plasma's mid stop): a dark
+  // tint of the accent at the base, the accent itself through the body, and a
+  // near-white tip. So a blue album burns blue, purple burns purple — the fixed
+  // dark base + white tip keep the contrast structure so it always reads as
+  // fire, never a flat one-color wash.
+  vec3 cDark = uAccent*0.06;
+  vec3 cMid  = uAccent*1.1;
+  vec3 cHot  = mix(uAccent, vec3(1.0,0.95,0.85), 0.7);
+  vec3 col = mix(cDark, cMid, smoothstep(0.20,0.60,f));
+  col = mix(col, cHot, smoothstep(0.60,0.88,f));
+  col = mix(col, vec3(1.0,0.96,0.88), smoothstep(0.88,1.0,f));
+  float spk=step(0.9,fbm(p*1.6+vec2(0.0,uTime*5.0)))*smoothstep(0.55,1.0,f);
+  col += spk*mix(vec3(1.0,0.85,0.6), vec3(1.0), 0.4)*(0.6+uBeat);
+  col *= 1.0 - uv.y*0.35;                 // settle the top into embers
+  vec2 c=uv-0.5; c.x*=asp; col *= 1.0 - dot(c,c)*0.35;
+  gl_FragColor=vec4(col,1.0);
+}`;
+
+// Hyperspace: radial star-streaks rushing outward from center. Angular+radial
+// fbm produces the streaks; beat injects a speed burst so each line change
+// reads as a forward "jump". Center stays bright (the warp core) tinted by
+// the cover color.
+const FRAG_WARP = `
+precision highp float;
+uniform vec2  uRes;
+uniform float uTime;
+uniform float uBeat;
+uniform vec3  uAccent;
+float hash(vec2 p){ vec3 p3=fract(vec3(p.xyx)*0.1031); p3+=dot(p3,p3.yzx+33.33); return fract((p3.x+p3.y)*p3.z); }
+float noise(vec2 p){ vec2 i=floor(p),f=fract(p);
+  float a=hash(i),b=hash(i+vec2(1.,0.)),c=hash(i+vec2(0.,1.)),d=hash(i+vec2(1.,1.));
+  vec2 u=f*f*(3.-2.*f); return mix(mix(a,b,u.x),mix(c,d,u.x),u.y); }
+float fbm(vec2 p){ float v=0.,a=.5; for(int i=0;i<4;i++){ v+=a*noise(p); p*=2.; a*=.5; } return v; }
+void main(){
+  vec2 uv=gl_FragCoord.xy/uRes; float asp=uRes.x/uRes.y;
+  vec2 c=uv-0.5; c.x*=asp; float ang=atan(c.y,c.x); float rad=length(c);
+  // t is pure phase × a constant. The forward acceleration on a line change
+  // comes ENTIRELY from uTime itself speeding up (the phase accumulator in the
+  // loop below advances faster while beat>0, then eases back) — exactly like
+  // plasma. Do NOT add uBeat into t: that shifts the sampling position, so the
+  // streaks jump forward on the beat and snap back as it decays (reads as a
+  // reset, not a surge). uBeat is used only for non-positional brightness.
+  float t=uTime*4.0;
+  float streak=fbm(vec2(ang*7.0,  rad*5.0 - t));
+  float s2    =fbm(vec2(ang*13.0+5.0, rad*8.0 - t*1.4));
+  vec3 col=mix(vec3(0.0,0.0,0.02), uAccent, smoothstep(0.5,0.85,streak));
+  col += vec3(1.0)*smoothstep(0.82,1.0,s2)*smoothstep(0.0,0.35,rad);
+  col *= smoothstep(0.0,0.12,rad);                       // dark just off-center
+  col += uAccent*smoothstep(0.12,0.0,rad)*(1.5+uBeat*1.6); // core flares on beat
+  col *= 1.0 + uBeat*0.25;                                // slight overall lift
+  gl_FragColor=vec4(col,1.0);
+}`;
+
+const SHADERS = { plasma: FRAG_PLASMA, ember: FRAG_EMBER, warp: FRAG_WARP };
 
 // ────────────────────────────────────────────────────────────────
 let canvas = null;
