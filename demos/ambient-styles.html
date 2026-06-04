@@ -323,6 +323,124 @@ const STYLES = [
       col *= 1.0+uBeat*0.25;
       gl_FragColor=vec4(col,1.0);
     }`},
+
+  { id:'silk', cn:'流丝', en:'silk / curl flow',
+    desc:'曲线流场把坐标一步步沿噪声方向推移，再画细密条纹——像被风吹动的丝绸或烟。有方向感，不是团块。',
+    frag:`void main(){
+      vec2 uv=gl_FragCoord.xy/uRes; float a=uRes.x/uRes.y;
+      vec2 q=vec2(uv.x*a,uv.y)*2.2; float t=uTime*0.6;
+      for(int i=0;i<5;i++){ float n=fbm(q*1.4+t*0.3); q += 0.16*vec2(cos(6.2831*n), sin(6.2831*n)); }
+      float lines=abs(sin((q.x+q.y)*16.0));
+      float v=smoothstep(0.0,0.55,lines);
+      vec3 col=mix(uAccent, uAccent*0.12, v);
+      col += (1.0-v)*0.35*(0.7+0.4*uBeat);
+      gl_FragColor=vec4(col,1.0);
+    }`},
+
+  { id:'scope', cn:'示波', en:'oscilloscope',
+    desc:'黑底上的李萨如曲线，相位连续流动让线条不断变形。细发光线条，和音乐天然契合，节拍时更亮。',
+    frag:`void main(){
+      vec2 uv=gl_FragCoord.xy/uRes; float a=uRes.x/uRes.y;
+      vec2 p=(uv-0.5)*2.0; p.x*=a; float t=uTime;
+      float glow=0.0;
+      for(int i=0;i<128;i++){ float s=float(i)/128.0*6.2831;
+        vec2 q=vec2(sin(3.0*s+t*0.5), sin(2.0*s+t*0.18))*0.72;
+        float d=length(p-q); glow += 0.0007/(d*d+0.0007);
+      }
+      vec3 col=uAccent*glow*(0.9+uBeat);
+      col += vec3(0.7,1.0,0.85)*pow(glow,2.2)*0.18;
+      gl_FragColor=vec4(col,1.0);
+    }`},
+
+  { id:'voronoi', cn:'晶格', en:'voronoi cells',
+    desc:'漂移的 Voronoi 种子点形成不断变形的细胞，边界发亮如冰晶/磨砂玻璃。规整、催眠。',
+    frag:`void main(){
+      vec2 uv=gl_FragCoord.xy/uRes; float a=uRes.x/uRes.y;
+      vec2 p=vec2(uv.x*a,uv.y)*5.0; float t=uTime*0.8;
+      vec2 ip=floor(p), fp=fract(p); float d1=9.0,d2=9.0;
+      for(int y=-1;y<=1;y++) for(int x=-1;x<=1;x++){
+        vec2 g=vec2(float(x),float(y));
+        vec2 rnd=vec2(hash21(ip+g), hash21(ip+g+19.0));
+        vec2 pt=g+0.5+0.42*sin(t+6.2831*rnd);
+        float d=length(pt-fp);
+        if(d<d1){ d2=d1; d1=d; } else if(d<d2){ d2=d; }
+      }
+      float edge=smoothstep(0.0,0.06,d2-d1);
+      vec3 cell=mix(uAccent, vec3(0.06,0.08,0.16), clamp(d1,0.0,1.0));
+      vec3 col=mix(vec3(0.85,0.95,1.0), cell, edge);
+      col *= 0.85+0.3*uBeat;
+      gl_FragColor=vec4(col,1.0);
+    }`},
+
+  { id:'bokeh', cn:'光斑', en:'bokeh orbs',
+    desc:'柔和失焦的光斑缓缓上浮，经典屏保级优雅。封面色 + 冷光随机混色。',
+    frag:`void main(){
+      vec2 uv=gl_FragCoord.xy/uRes; float a=uRes.x/uRes.y;
+      vec2 p=vec2(uv.x*a,uv.y); float t=uTime*0.6;
+      vec3 col=vec3(0.01,0.02,0.05);
+      for(int i=0;i<14;i++){ float fi=float(i);
+        vec2 c=vec2(hash21(vec2(fi,1.3))*a,
+                    fract(hash21(vec2(fi,2.7)) + t*0.06*(0.5+hash21(vec2(fi,3.1)))));
+        float r=0.05+0.11*hash21(vec2(fi,4.2));
+        float d=length(p-c);
+        float disc=smoothstep(r,r*0.2,d);
+        float ring=smoothstep(r,r*0.82,d)*smoothstep(r*0.68,r,d);
+        vec3 oc=mix(uAccent, vec3(0.55,0.8,1.0), hash21(vec2(fi,5.5)));
+        col += oc*(disc*0.22 + ring*0.45)*(0.7+0.5*sin(t*1.3+fi))*(0.9+0.5*uBeat);
+      }
+      gl_FragColor=vec4(col,1.0);
+    }`},
+
+  { id:'julia', cn:'分形', en:'julia set',
+    desc:'Julia 集，c 参数沿圆周缓动让分形触须无限地缓慢变形，永不重复。无限细节。',
+    frag:`void main(){
+      vec2 uv=gl_FragCoord.xy/uRes; float a=uRes.x/uRes.y;
+      vec2 p=(uv-0.5)*2.6; p.x*=a; float t=uTime*0.25;
+      vec2 c=0.7885*vec2(cos(t),sin(t));
+      vec2 z=p; float it=0.0;
+      for(int i=0;i<72;i++){ z=vec2(z.x*z.x-z.y*z.y, 2.0*z.x*z.y)+c; if(dot(z,z)>4.0) break; it+=1.0; }
+      float m=it/72.0;
+      vec3 col=mix(vec3(0.02,0.0,0.05), uAccent, m);
+      col += uAccent*0.35*sin(m*12.0+t)*(0.7+0.5*uBeat);
+      col *= step(it,71.5);   // inside the set → near-black
+      gl_FragColor=vec4(col,1.0);
+    }`},
+
+  { id:'truchet', cn:'回路', en:'truchet circuit',
+    desc:'Truchet 弧线随机拼成无尽回路，能量脉冲沿线条流动，像呼吸的电路板。几何、规整。',
+    frag:`void main(){
+      vec2 uv=gl_FragCoord.xy/uRes; float a=uRes.x/uRes.y;
+      vec2 p=vec2(uv.x*a,uv.y)*8.0; vec2 ip=floor(p), fp=fract(p);
+      if(hash21(ip)<0.5) fp.x=1.0-fp.x;
+      float d=min(abs(length(fp)-0.5), abs(length(fp-1.0)-0.5));
+      float line=smoothstep(0.09,0.0,d);
+      float flow=sin((fp.x+fp.y)*9.0 - uTime*3.0)*0.5+0.5;
+      vec3 col=mix(vec3(0.02,0.03,0.07), uAccent, line*(0.35+0.65*flow));
+      col += line*flow*0.3*(0.7+uBeat);
+      gl_FragColor=vec4(col,1.0);
+    }`},
+
+  { id:'rain', cn:'雨痕', en:'rain on glass',
+    desc:'雨滴打在玻璃上、折射身后模糊的霓虹光，缓缓下滑。「窗边听歌」的氛围，最适合阴天/夜晚。',
+    frag:`void main(){
+      vec2 uv=gl_FragCoord.xy/uRes; float a=uRes.x/uRes.y; float t=uTime;
+      vec2 disp=vec2(0.0); float hl=0.0;
+      for(int i=0;i<3;i++){ float fi=float(i)+1.0;
+        vec2 grid=uv*vec2(7.0,3.5)*fi; grid.y += t*0.6*fi;
+        vec2 id=floor(grid); vec2 f=fract(grid)-0.5;
+        float rnd=hash21(id+fi*13.0);
+        float r=0.34+0.16*sin(t*0.7+rnd*30.0);
+        float d=length(f*vec2(1.0,1.3));
+        float drop=smoothstep(r,r*0.55,d);
+        disp += f*drop*0.35/fi; hl += drop*smoothstep(r*0.6,0.0,d);
+      }
+      vec2 suv=uv+disp*0.12;
+      vec3 bg=mix(vec3(0.03,0.04,0.08), uAccent*0.85, suv.y);
+      bg += uAccent*0.5*pow(fbm(suv*3.0+vec2(0.0,t*0.2)),2.0);   // blurry neon behind glass
+      bg *= 0.7;                                                  // fogged glass
+      vec3 col=bg + hl*0.35*(0.8+0.6*uBeat);
+      gl_FragColor=vec4(col,1.0);
+    }`},
 ];
 
 // ─── WebGL plumbing ──────────────────────────────────────────────────

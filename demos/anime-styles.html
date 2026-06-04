@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>echo · 二次元主题探索 / anime styles</title>
+<style>
+  :root { --ui: rgba(255,255,255,0.85); --dim: rgba(255,255,255,0.5); }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; overflow: hidden;
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans", system-ui, sans-serif;
+    background: #000; color: var(--ui); }
+  #stage { position: fixed; inset: 0; }
+  canvas { width: 100%; height: 100%; display: block; }
+  #lyric { position: fixed; left: 50%; top: 50%; transform: translate(-50%,-50%);
+    text-align: center; pointer-events: none; transition: opacity .4s; z-index: 5; }
+  #lyric .line { font-size: 34px; font-weight: 800; letter-spacing: 1px; }
+  #lyric .sub  { font-size: 15px; font-weight: 500; opacity: .65; margin-top: 8px; }
+  body.hide-lyric #lyric { opacity: 0; }
+  #panel { position: fixed; top: 18px; left: 18px; width: 252px; z-index: 10;
+    background: rgba(14,14,20,0.58); backdrop-filter: blur(22px) saturate(1.4);
+    -webkit-backdrop-filter: blur(22px) saturate(1.4);
+    border: 1px solid rgba(255,255,255,0.1); border-radius: 16px; padding: 14px;
+    box-shadow: 0 18px 50px rgba(0,0,0,.5); transition: transform .3s, opacity .3s; }
+  body.hide-ui #panel { transform: translateX(-300px); opacity: 0; }
+  #panel h1 { font-size: 12px; font-weight: 700; letter-spacing: .8px; text-transform: uppercase;
+    color: var(--dim); margin-bottom: 4px; }
+  #panel .hint { font-size: 11px; color: var(--dim); line-height: 1.5; margin-bottom: 12px; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .styleBtn { appearance: none; border: 1px solid rgba(255,255,255,0.12); background: rgba(255,255,255,0.04);
+    color: var(--ui); border-radius: 10px; padding: 8px 6px; font-size: 12px; cursor: pointer;
+    text-align: left; line-height: 1.2; transition: all .15s; }
+  .styleBtn:hover { background: rgba(255,255,255,0.1); }
+  .styleBtn.active { background: rgba(255,255,255,0.16); border-color: rgba(255,255,255,0.5); }
+  .styleBtn .en { display: block; font-size: 9px; color: var(--dim); margin-top: 2px; letter-spacing: .3px; }
+  .row { display: flex; align-items: center; gap: 8px; margin-top: 12px; font-size: 12px; color: var(--ui); }
+  .row label { flex: 1; color: var(--dim); }
+  input[type=range] { flex: 1.2; accent-color: #fff; }
+  input[type=color] { width: 30px; height: 24px; border: none; border-radius: 6px; background: none; cursor: pointer; }
+  .toggle { display: flex; align-items: center; gap: 6px; cursor: pointer; }
+  .divider { height: 1px; background: rgba(255,255,255,0.08); margin: 12px 0; }
+  #desc { position: fixed; bottom: 18px; left: 18px; z-index: 10; max-width: 440px;
+    font-size: 12px; color: var(--dim); line-height: 1.6; transition: opacity .3s; }
+  body.hide-ui #desc { opacity: 0; }
+  #desc b { color: var(--ui); font-weight: 600; }
+  kbd { background: rgba(255,255,255,0.12); border-radius: 4px; padding: 1px 5px; font-size: 10px;
+    font-family: ui-monospace, Menlo, monospace; }
+  #hud { position: fixed; top: 18px; right: 18px; z-index: 10; font-size: 11px; color: var(--dim);
+    text-align: right; line-height: 1.7; transition: opacity .3s; }
+  body.hide-ui #hud { opacity: 0; }
+</style>
+</head>
+<body>
+  <div id="stage"><canvas id="gl"></canvas></div>
+
+  <div id="lyric">
+    <div class="line" id="lyricLine">君の名は、まだ思い出せない</div>
+    <div class="sub" id="lyricSub">echo · anime / manga styles</div>
+  </div>
+
+  <div id="panel">
+    <h1>二次元主题探索</h1>
+    <div class="hint">漫画语言路线：<b style="color:var(--ui)">网点 + 集中线</b> 与 <b style="color:var(--ui)">赛璐璐卡通渲染</b>。全部无需音乐自维持动态，「模拟节拍」预览换歌词时的漫画「气势」爆发。</div>
+    <div class="grid" id="styleGrid"></div>
+
+    <div class="row"><label>封面主色</label><input type="color" id="accent" value="#ff6fae" /></div>
+    <div class="row"><label>流动速度</label><input type="range" id="speed" min="0" max="3" step="0.05" value="1" /></div>
+    <div class="divider"></div>
+    <div class="row">
+      <span class="toggle"><input type="checkbox" id="autoPulse" /> 模拟节拍</span>
+      <span class="toggle"><input type="checkbox" id="showLyric" checked /> 歌词</span>
+    </div>
+    <div class="row" style="margin-top:8px">
+      <button class="styleBtn" id="pulseBtn" style="flex:1;text-align:center">气势爆发一下 (空格)</button>
+    </div>
+  </div>
+
+  <div id="hud">
+    <div id="fps">– fps</div>
+    <div>← → 切换 · <kbd>H</kbd> 隐藏 UI · <kbd>L</kbd> 歌词</div>
+  </div>
+
+  <div id="desc"><b id="descTitle"></b> — <span id="descText"></span></div>
+
+<script>
+const PRELUDE = `
+precision highp float;
+uniform vec2  uRes;
+uniform float uTime;
+uniform float uBeat;
+uniform vec3  uAccent;
+float hash21(vec2 p){ vec3 p3=fract(vec3(p.xyx)*0.1031); p3+=dot(p3,p3.yzx+33.33); return fract((p3.x+p3.y)*p3.z); }
+float noise(vec2 p){ vec2 i=floor(p),f=fract(p);
+  float a=hash21(i),b=hash21(i+vec2(1.,0.)),c=hash21(i+vec2(0.,1.)),d=hash21(i+vec2(1.,1.));
+  vec2 u=f*f*(3.-2.*f); return mix(mix(a,b,u.x),mix(c,d,u.x),u.y); }
+float fbm(vec2 p){ float v=0.,a=.5; for(int i=0;i<5;i++){ v+=a*noise(p); p*=2.; a*=.5; } return v; }
+mat2 rot(float a){ float c=cos(a),s=sin(a); return mat2(c,-s,s,c); }
+`;
+const VERT = `attribute vec2 aPos; void main(){ gl_Position=vec4(aPos,0.,1.); }`;
+
+const STYLES = [
+  // ── 网点 / 集中线 ────────────────────────────────────────────────
+  { id:'halftone', cn:'网点纸', en:'screentone',
+    desc:'漫画半调网点：墨点大小跟随缓动的浓淡场，米色纸 + 纸纹颗粒。最基础的漫画质感底子，节拍时墨点涨一圈。',
+    frag:`void main(){
+      vec2 uv=gl_FragCoord.xy/uRes; float a=uRes.x/uRes.y; vec2 p=vec2(uv.x*a,uv.y);
+      float v=fbm(p*2.6+uTime*0.18); v=smoothstep(0.2,0.8,v);
+      float scale=68.0; vec2 hp=rot(0.4)*uv*vec2(scale*a,scale);
+      vec2 c=fract(hp)-0.5;
+      float radius=sqrt(clamp(v,0.0,1.0))*0.62*(1.0+uBeat*0.25);
+      float ink=smoothstep(radius, radius-0.06, length(c));
+      vec3 paper=vec3(0.96,0.94,0.88);
+      vec3 inkc=mix(vec3(0.07,0.06,0.09), uAccent*0.5, 0.25);
+      vec3 col=mix(paper, inkc, ink);
+      col -= hash21(floor(uv*uRes*0.5))*0.025;
+      gl_FragColor=vec4(col,1.0);
+    }`},
+
+  { id:'speedlines', cn:'集中线', en:'speed lines',
+    desc:'漫画放射状集中线，宽窄不均。中心是「焦点圈」（不画线），节拍来时焦点收缩→线条向中心冲刺，做出「冲击」分镜。平时焦点缓慢呼吸。',
+    frag:`void main(){
+      vec2 uv=gl_FragCoord.xy/uRes; float a=uRes.x/uRes.y;
+      vec2 c=uv-0.5; c.x*=a; float ang=atan(c.y,c.x); float rad=length(c);
+      vec3 paper=vec3(0.96,0.94,0.88);
+      float N=72.0;
+      float idx=floor((ang/6.2831+0.5)*N);
+      float w=0.16+0.5*hash21(vec2(idx,3.0));
+      float line=step(fract((ang/6.2831+0.5)*N), w);
+      float focus=0.34 - uBeat*0.20 + 0.02*sin(uTime*2.0);
+      float radial=smoothstep(focus, focus+0.5, rad);
+      float ink=line*radial*(0.85+0.15*sin(uTime*3.0+idx));
+      vec3 col=mix(paper, vec3(0.05,0.05,0.07), ink);
+      gl_FragColor=vec4(col,1.0);
+    }`},
+
+  { id:'impact', cn:'漫画·气势', en:'manga impact',
+    desc:'少年漫画「招式分镜」合体：动态网点底 + 彩色集中线 + 换歌词时炸开的墨环。最满的二次元气势感。',
+    frag:`void main(){
+      vec2 uv=gl_FragCoord.xy/uRes; float a=uRes.x/uRes.y;
+      vec2 p=vec2(uv.x*a,uv.y); vec2 c=uv-0.5; c.x*=a;
+      float ang=atan(c.y,c.x); float rad=length(c);
+      float v=fbm(p*3.0+uTime*0.25); v=smoothstep(0.25,0.78,v);
+      float scale=60.0; vec2 hp=rot(0.4)*uv*vec2(scale*a,scale);
+      float ink=smoothstep(sqrt(clamp(v,0.0,1.0))*0.6, sqrt(clamp(v,0.0,1.0))*0.6-0.07, length(fract(hp)-0.5));
+      vec3 paper=vec3(0.97,0.95,0.9);
+      vec3 col=mix(paper, mix(vec3(0.1),uAccent*0.6,0.3), ink*0.7);
+      float N=64.0; float idx=floor((ang/6.2831+0.5)*N);
+      float w=0.14+0.4*hash21(vec2(idx,5.0));
+      float focus=0.30 - uBeat*0.22;
+      float lines=step(fract((ang/6.2831+0.5)*N), w)*smoothstep(focus,focus+0.45,rad);
+      col=mix(col, uAccent*0.8, lines*(0.5+uBeat*0.5));
+      float ring=smoothstep(0.04,0.0,abs(rad-(0.15+uBeat*0.6)))*uBeat;
+      col=mix(col, vec3(0.06,0.05,0.08), ring);
+      gl_FragColor=vec4(col,1.0);
+    }`},
+
+  // ── 赛璐璐 / 卡通渲染 ───────────────────────────────────────────
+  { id:'celsky', cn:'天空 (ちいかわ)', en:'cel sky · chiikawa',
+    desc:'柔和粉彩天空 + 圆润蓬松平涂白云 + 细软的棕色描边（不是黑硬边）。低对比、奶呼呼的治愈感。云缓慢飘移，几乎静止，最适合长挂。已正式做进 echo。',
+    frag:`float cloudAt(vec2 q){ return smoothstep(0.53,0.74, fbm(q)); }
+    void main(){
+      vec2 uv=gl_FragCoord.xy/uRes; float a=uRes.x/uRes.y; vec2 p=vec2(uv.x*a,uv.y);
+      vec3 sky=mix(vec3(0.99,0.94,0.88), vec3(0.62,0.80,0.93), smoothstep(0.0,1.0,uv.y));
+      sky=mix(sky, sky*mix(vec3(1.0),uAccent*1.4,0.6), 0.14);
+      vec2 dr=vec2(uTime*0.04,0.0); vec2 sp=p*1.8;
+      float n=fbm(sp+dr);
+      float cl=cloudAt(sp+dr), cl2=cloudAt(sp+vec2(0.018,0.0)+dr), cl3=cloudAt(sp+vec2(0.0,0.018)+dr);
+      float band=step(0.5,cl), band2=step(0.5,cl2), band3=step(0.5,cl3);
+      float shade=smoothstep(0.55,0.72,n);
+      vec3 cloudCol=mix(vec3(0.92,0.91,0.95), vec3(1.0), step(0.5,shade));
+      float e=(band!=band2||band!=band3)?1.0:0.0;
+      vec3 col=mix(sky, cloudCol, band);
+      col=mix(col, vec3(0.70,0.63,0.57), e*0.9);
+      col += band*uBeat*0.06;
+      vec2 c=uv-0.5; c.x*=a; col*=1.0-dot(c,c)*0.12;
+      gl_FragColor=vec4(col,1.0);
+    }`},
+
+  { id:'celfluid', cn:'赛璐璐·流体', en:'cel-shaded fluid',
+    desc:'把「流体」过一道卡通渲染：同样的域扭曲 fbm，但色阶化成 4 段平涂 + 黑描边。演示怎么把已有抽象主题一键「动画化」。',
+    frag:`void main(){
+      vec2 uv=gl_FragCoord.xy/uRes; float a=uRes.x/uRes.y; vec2 p=vec2(uv.x*a,uv.y)*3.5;
+      float t=uTime;
+      vec2 q=vec2(fbm(p+t), fbm(p+vec2(5.2,1.3)-t));
+      float f =fbm(p+3.0*q);
+      float f2=fbm(p+vec2(0.04,0.0)+3.0*q);
+      float f3=fbm(p+vec2(0.0,0.04)+3.0*q);
+      float band=floor(f*4.0)/4.0;
+      vec3 dark=vec3(0.12,0.10,0.32);
+      vec3 col=mix(dark, uAccent, band);
+      col=mix(col, vec3(1.0), step(0.74,band)*0.45);       // bright top band → highlight
+      float e=0.0; if(floor(f*4.0)!=floor(f2*4.0)||floor(f*4.0)!=floor(f3*4.0)) e=1.0;
+      col=mix(col, vec3(0.0,0.0,0.05), e*0.7);             // bold dark outline
+      col *= 0.9+0.2*uBeat;
+      vec2 c=uv-0.5; c.x*=a; col*=1.0-dot(c,c)*0.3;
+      gl_FragColor=vec4(col,1.0);
+    }`},
+];
+
+// ── WebGL plumbing (same as ambient-styles) ──────────────────────────
+const canvas=document.getElementById('gl');
+const gl=canvas.getContext('webgl',{alpha:false,antialias:false});
+const RES_SCALE=0.65;
+function compile(src,type){ const s=gl.createShader(type); gl.shaderSource(s,src); gl.compileShader(s);
+  if(!gl.getShaderParameter(s,gl.COMPILE_STATUS)){ console.error(gl.getShaderInfoLog(s)); return null; } return s; }
+function buildProgram(body){ const fs=compile(PRELUDE+'\n'+body,gl.FRAGMENT_SHADER), vs=compile(VERT,gl.VERTEX_SHADER);
+  if(!fs||!vs) return null; const p=gl.createProgram(); gl.attachShader(p,vs); gl.attachShader(p,fs); gl.linkProgram(p);
+  if(!gl.getProgramParameter(p,gl.LINK_STATUS)){ console.error(gl.getProgramInfoLog(p)); return null; } return p; }
+const buf=gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER,buf);
+gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,1,-1,-1,1,-1,1,1,-1,1,1]),gl.STATIC_DRAW);
+const progs={};
+for(const st of STYLES){ const p=buildProgram(st.frag);
+  if(p){ progs[st.id]={p,aPos:gl.getAttribLocation(p,'aPos'),
+    uTime:gl.getUniformLocation(p,'uTime'),uRes:gl.getUniformLocation(p,'uRes'),
+    uBeat:gl.getUniformLocation(p,'uBeat'),uAccent:gl.getUniformLocation(p,'uAccent')}; }
+  else progs[st.id]=null; }
+function resize(){ const w=Math.max(1,Math.floor(innerWidth*RES_SCALE)),h=Math.max(1,Math.floor(innerHeight*RES_SCALE));
+  if(canvas.width!==w||canvas.height!==h){ canvas.width=w; canvas.height=h; gl.viewport(0,0,w,h); } }
+addEventListener('resize',resize); resize();
+
+let current=STYLES[0].id, phase=0, beat=0, last=0, speedMul=1, accent=[1,0.43,0.68], frames=0, fpsLast=0, lastAuto=0;
+function hexToRGB(h){ const n=parseInt(h.slice(1),16); return [((n>>16)&255)/255,((n>>8)&255)/255,(n&255)/255]; }
+function loop(now){ requestAnimationFrame(loop);
+  const dt=last?Math.min(0.05,(now-last)/1000):0.016; last=now;
+  phase += dt*(0.28+beat*1.6)*speedMul; beat*=0.93;
+  if(autoPulse.checked && now-lastAuto>1400){ pulse(0.8); lastAuto=now; cycleLyric(); }
+  const g=progs[current]; resize();
+  if(g){ gl.useProgram(g.p); gl.bindBuffer(gl.ARRAY_BUFFER,buf);
+    gl.enableVertexAttribArray(g.aPos); gl.vertexAttribPointer(g.aPos,2,gl.FLOAT,false,0,0);
+    gl.uniform1f(g.uTime,phase); gl.uniform1f(g.uBeat,beat);
+    gl.uniform2f(g.uRes,canvas.width,canvas.height); gl.uniform3f(g.uAccent,accent[0],accent[1],accent[2]);
+    gl.drawArrays(gl.TRIANGLES,0,6); }
+  frames++; if(now-fpsLast>500){ document.getElementById('fps').textContent=Math.round(frames*1000/(now-fpsLast))+' fps'; frames=0; fpsLast=now; }
+}
+function pulse(amt){ beat=Math.min(1,beat+(amt||0.7)); }
+
+const LYRICS=[
+  ['君の名は、まだ思い出せない','— demo line'],
+  ['この世界のすべてを賭けても','— demo line'],
+  ['駆け出した、夏の終わりへ','— demo line'],
+  ['もう一度だけ、君に会いたい','— demo line'],
+  ['全力で、今を生きてみる','— demo line'],
+];
+let li=0;
+function cycleLyric(){ li=(li+1)%LYRICS.length; document.getElementById('lyricLine').textContent=LYRICS[li][0]; document.getElementById('lyricSub').textContent=LYRICS[li][1]; }
+
+const grid=document.getElementById('styleGrid');
+STYLES.forEach(st=>{ const b=document.createElement('button'); b.className='styleBtn'+(st.id===current?' active':'');
+  b.innerHTML=`${st.cn}<span class="en">${st.en}</span>`; b.dataset.id=st.id;
+  if(!progs[st.id]){ b.style.opacity=.4; b.title='shader 编译失败'; }
+  b.onclick=()=>setStyle(st.id); grid.appendChild(b); });
+function setStyle(id){ current=id; [...grid.children].forEach(c=>c.classList.toggle('active',c.dataset.id===id));
+  const st=STYLES.find(s=>s.id===id);
+  document.getElementById('descTitle').textContent=`${st.cn} / ${st.en}`;
+  document.getElementById('descText').textContent=st.desc; pulse(0.5); }
+const accentEl=document.getElementById('accent');
+accentEl.oninput=()=>accent=hexToRGB(accentEl.value); accent=hexToRGB(accentEl.value);
+document.getElementById('speed').oninput=e=>speedMul=parseFloat(e.target.value);
+const autoPulse=document.getElementById('autoPulse');
+document.getElementById('pulseBtn').onclick=()=>pulse();
+document.getElementById('showLyric').onchange=e=>document.body.classList.toggle('hide-lyric',!e.target.checked);
+addEventListener('keydown',e=>{
+  if(e.key==='ArrowRight'||e.key==='ArrowDown'){ const i=STYLES.findIndex(s=>s.id===current); setStyle(STYLES[(i+1)%STYLES.length].id); }
+  if(e.key==='ArrowLeft'||e.key==='ArrowUp'){ const i=STYLES.findIndex(s=>s.id===current); setStyle(STYLES[(i-1+STYLES.length)%STYLES.length].id); }
+  if(e.key===' '){ e.preventDefault(); pulse(); cycleLyric(); }
+  if(e.key.toLowerCase()==='h'){ document.body.classList.toggle('hide-ui'); }
+  if(e.key.toLowerCase()==='l'){ const c=document.getElementById('showLyric'); c.checked=!c.checked; c.onchange({target:c}); }
+});
+setStyle(current);
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>

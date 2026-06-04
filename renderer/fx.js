@@ -171,7 +171,50 @@ void main(){
   gl_FragColor=vec4(col,1.0);
 }`;
 
-const SHADERS = { plasma: FRAG_PLASMA, ember: FRAG_EMBER, warp: FRAG_WARP };
+// Cel sky (ちいかわ-flavored): pastel sky gradient with puffy flat-shaded clouds
+// and a SOFT TAUPE outline (not the hard black of typical toon shading) — that
+// gentle low-contrast palette + rounded puffs is what reads as "cute/Chiikawa"
+// rather than crisp Shinkai. Clouds drift slowly so it's alive with no music;
+// the cover color only tints the sky a touch (pastel, never garish). uBeat just
+// puffs the clouds a hair, no position shift.
+//
+// Note this is the only LIGHT theme that uses fx — themes.js pairs it with dark
+// text + a white halo so lyrics read over both white cloud and blue sky.
+const FRAG_CELSKY = `
+precision highp float;
+uniform vec2  uRes;
+uniform float uTime;
+uniform float uBeat;
+uniform vec3  uAccent;
+float hash(vec2 p){ vec3 p3=fract(vec3(p.xyx)*0.1031); p3+=dot(p3,p3.yzx+33.33); return fract((p3.x+p3.y)*p3.z); }
+float noise(vec2 p){ vec2 i=floor(p),f=fract(p);
+  float a=hash(i),b=hash(i+vec2(1.,0.)),c=hash(i+vec2(0.,1.)),d=hash(i+vec2(1.,1.));
+  vec2 u=f*f*(3.-2.*f); return mix(mix(a,b,u.x),mix(c,d,u.x),u.y); }
+float fbm(vec2 p){ float v=0.,a=.5; for(int i=0;i<4;i++){ v+=a*noise(p); p*=2.; a*=.5; } return v; }
+float cloudAt(vec2 q){ return smoothstep(0.53,0.74, fbm(q)); }
+void main(){
+  vec2 uv=gl_FragCoord.xy/uRes; float asp=uRes.x/uRes.y; vec2 p=vec2(uv.x*asp,uv.y);
+  // pastel gradient: warm cream low, soft sky-blue high (low saturation)
+  vec3 sky=mix(vec3(0.99,0.94,0.88), vec3(0.62,0.80,0.93), smoothstep(0.0,1.0,uv.y));
+  sky=mix(sky, sky*mix(vec3(1.0),uAccent*1.4,0.6), 0.14);   // gentle cover tint
+  vec2 dr=vec2(uTime*0.04,0.0); vec2 sp=p*1.8;
+  float n =fbm(sp+dr);
+  float cl =cloudAt(sp+dr);
+  float cl2=cloudAt(sp+vec2(0.018,0.0)+dr);
+  float cl3=cloudAt(sp+vec2(0.0,0.018)+dr);
+  float band =step(0.5,cl), band2=step(0.5,cl2), band3=step(0.5,cl3);
+  // two flat cloud tones (lit top vs faint shadow underside) = cel look
+  float shade=smoothstep(0.55,0.72,n);
+  vec3 cloudCol=mix(vec3(0.92,0.91,0.95), vec3(1.0), step(0.5,shade));
+  float edge=(band!=band2||band!=band3)?1.0:0.0;
+  vec3 col=mix(sky, cloudCol, band);
+  col=mix(col, vec3(0.70,0.63,0.57), edge*0.9);            // soft taupe outline
+  col += band*uBeat*0.06;                                   // clouds puff on beat
+  vec2 c=uv-0.5; c.x*=asp; col*=1.0-dot(c,c)*0.12;          // gentle warm vignette
+  gl_FragColor=vec4(col,1.0);
+}`;
+
+const SHADERS = { plasma: FRAG_PLASMA, ember: FRAG_EMBER, warp: FRAG_WARP, celsky: FRAG_CELSKY };
 
 // ────────────────────────────────────────────────────────────────
 let canvas = null;
@@ -196,12 +239,15 @@ const PHASE_BEAT_BOOST = 1.6;  // multiplier added to base when beat is at 1.
 // has been sampled. Vivid + saturated = the plasma reads as colorful even
 // before the first track's accent arrives.
 let accent = [0.92, 0.22, 0.52];
-// Internal-resolution scale: the canvas drawing buffer is rendered at this
-// fraction of CSS pixels and stretched up by GPU. Plasma is a smooth color
-// field; you can't see a half-resolution buffer, but you can absolutely see
-// the difference in fragment cost — at 0.5 we shade 1/4 the pixels of the
-// original DPR=2 path. Cap at 1 for safety on already-tiny windows.
-const FX_RES_SCALE = 0.5;
+// Internal-resolution scale, PER SHADER. Smooth color fields (plasma/ember/
+// warp) hide a half-res buffer completely, so they render at 0.5× CSS pixels —
+// 1/4 the fragment cost. But edge-based shaders (celsky: flat bands + a 1px
+// cloud outline) reveal a low-res buffer as mush/blur once it's upscaled, so
+// they must render at full physical resolution (CSS × DPR). Default 0.5.
+const DPR = Math.min(typeof window !== 'undefined' ? (window.devicePixelRatio || 1) : 1, 2);
+const FX_RES_SCALE_BY_SHADER = { plasma: 0.5, ember: 0.5, warp: 0.5, celsky: DPR };
+const FX_RES_SCALE_DEFAULT = 0.5;
+let fxResScale = FX_RES_SCALE_DEFAULT;
 
 function compile(src, type) {
   const s = gl.createShader(type);
@@ -231,11 +277,11 @@ function build(fragSrc) {
 }
 
 function resize() {
-  // Render at FX_RES_SCALE × CSS pixels (ignoring DPR entirely — the GPU
-  // does the upscale to physical pixels for free, and a smooth fbm field
-  // doesn't reveal the lower buffer res).
-  const w = Math.max(1, Math.floor(canvas.clientWidth  * FX_RES_SCALE));
-  const h = Math.max(1, Math.floor(canvas.clientHeight * FX_RES_SCALE));
+  // Render at fxResScale × CSS pixels (set per-shader in start()). Smooth
+  // fields use 0.5 and let the GPU upscale; edge-based shaders use full DPR so
+  // outlines/flat-band boundaries stay crisp instead of blurring on upscale.
+  const w = Math.max(1, Math.floor(canvas.clientWidth  * fxResScale));
+  const h = Math.max(1, Math.floor(canvas.clientHeight * fxResScale));
   if (canvas.width !== w || canvas.height !== h) {
     canvas.width = w; canvas.height = h;
     gl.viewport(0, 0, w, h);
@@ -267,6 +313,7 @@ function start(name) {
   stop();
   const frag = SHADERS[name];
   if (!frag) return;
+  fxResScale = FX_RES_SCALE_BY_SHADER[name] || FX_RES_SCALE_DEFAULT;
   canvas = document.getElementById('fx');
   if (!canvas) return;
   // Reuse the same GL context across start/stop cycles. Calling

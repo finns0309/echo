@@ -165,6 +165,39 @@ const THEMES = [
     },
   },
 
+  // ---------- stage · cel sky (WebGL pastel toon clouds, ちいかわ vibe) ----------
+  // The only LIGHT fx theme: pastel sky, so text is dark with a white halo
+  // (the opposite of every other theme) to stay legible over white cloud.
+  {
+    name: 'sky', label: '天空', window: 'ambient',
+    layout: 'stage', reveal: 'wave', fx: 'celsky',
+    tokens: {
+      // Match the shader's cream-bottom so any uncovered edge blends light.
+      '--fl-bg-color':     '#fcefe2',
+      '--fl-bg-image':     'none',
+      '--fl-bg-scale':     '1',
+      // No dark vignette here — keep it airy. A faint top-light wash only.
+      '--fl-tint-image': `
+        radial-gradient(ellipse 120% 80% at 50% 15%, rgba(255,255,255,0.25), transparent 60%)`,
+      // Warm dark-brown text (Chiikawa's outline color) + white halo so it
+      // lifts off both the white clouds and the blue sky.
+      '--fl-text-color':   '#4a4039',
+      '--fl-text-weight':  '820',
+      '--fl-text-size':    '32px',
+      '--fl-letter-spacing':'0.6px',
+      '--fl-text-shadow': `
+        0 1px 0 rgba(255,255,255,0.85),
+        0 0 16px rgba(255,255,255,0.7),
+        0 2px 10px rgba(120,100,80,0.25)`,
+      '--fl-text-stroke':  '0.5px rgba(255,255,255,0.5)',
+      '--fl-chrome-bg':     'rgba(255,250,244,0.6)',
+      '--fl-chrome-fg':     '#4a4039',
+      '--fl-chrome-border': 'rgba(120,100,80,0.18)',
+      '--fl-chrome-artist': 'rgba(74,64,57,0.6)',
+      '--fl-chrome-btn-hover-bg': 'rgba(120,100,80,0.1)',
+    },
+  },
+
   // ---------- single · subtitle (desktop subtitle strip) ----------
   {
     name: 'subtitle', label: '字幕', window: 'subtitle-strip',
