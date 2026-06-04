@@ -29,15 +29,6 @@ function parseLRC(lrc) {
   return out;
 }
 
-// Merge original + translation timelines (match by time within 50ms).
-function mergeLyrics(orig, trans) {
-  if (!trans || trans.length === 0) return orig;
-  return orig.map((l) => {
-    const t = trans.find((x) => Math.abs(x.time - l.time) < 0.05);
-    return t && t.text ? { ...l, trans: t.text } : l;
-  });
-}
-
 // ─── Karaoke (per-character) timing ─────────────────────────────────────────
 // NetEase yrc format:
 //   [lineStartMs,lineDurMs](charStartMs,charDurMs)char(charStartMs,charDurMs)char...
@@ -155,4 +146,4 @@ function findIndex(lines, t) {
   return ans;
 }
 
-window.LRC = { parseLRC, mergeLyrics, findIndex, parseYRC, buildKaraoke, findCharIndex };
+window.LRC = { parseLRC, findIndex, parseYRC, buildKaraoke, findCharIndex };

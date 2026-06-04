@@ -373,36 +373,6 @@ const THEMES = [
     },
   },
 
-  // ---------- stage · storm (heavy rain + lightning on onset) ----------
-  // Like piano's rain but heavier, no piano keys, with full-canvas lightning
-  // flashes triggered by hard onsets. Uses --fl-tint-animation to slide the
-  // rain hatching the same way piano theme does.
-  {
-    name: 'storm', label: '暴雨', window: 'ambient',
-    layout: 'stage', reveal: 'wave',
-    customClass: true,
-    tokens: {
-      '--fl-bg-saturate':   '0.6',
-      '--fl-bg-brightness': '0.36',
-      '--fl-bg-blur':       '22px',  // was 34 — heavy blur was the main perf cost
-      '--fl-bg-scale':      '1.18',
-      // Crank the rain hatching opacity way up so it actually reads as rain
-      // against a dark cover. Two layers at slightly different angles +
-      // densities = parallax-feeling sheet of rain. Low solid darkening on
-      // top so the rain survives.
-      '--fl-tint-image': `
-        linear-gradient(180deg, rgba(6,10,20,0.45), rgba(2,4,12,0.7)),
-        repeating-linear-gradient(20deg, rgba(255,255,255,0.22) 0 1.5px, transparent 1.5px 4px),
-        repeating-linear-gradient(17deg, rgba(255,255,255,0.12) 0 1px,   transparent 1px 7px)`,
-      '--fl-tint-animation':'storm-rain 0.9s linear infinite',
-      '--fl-text-color':    '#e8eef8',
-      '--fl-text-weight':   '700',
-      '--fl-text-size':     '32px',
-      '--fl-letter-spacing':'0.4px',
-      '--fl-text-shadow':   '0 2px 14px rgba(0,0,0,0.7), 0 0 24px rgba(160,180,220,0.35)',
-    },
-  },
-
   // ---------- stage · kinetic (术曲 — ボカロ MV style kinetic typography) -----
   // Each line appears at a random screen position with random scale, rotation,
   // and entrance animation — mimicking the dynamic layout of Vocaloid MVs.
@@ -425,51 +395,6 @@ const THEMES = [
       '--fl-text-shadow': `
         0 2px 14px rgba(0,0,0,0.6),
         0 0 28px var(--accent-glow)`,
-    },
-  },
-
-  // ---------- stage · shatter (字碎 — character explosion on line exit) ------
-  // Lyrics render in DOM via stage layout. When a line leaves, its characters
-  // burst into spinning particles via Three.js overlay. Overlay mode: the
-  // 3D canvas layers on top of normal stage rendering.
-  {
-    name: 'shatter', label: '字碎', window: 'headline',
-    layout: 'stage', reveal: 'wave', three: 'shatter',
-    tokens: {
-      '--fl-bg-blur':       '48px',
-      '--fl-bg-saturate':   '1.5',
-      '--fl-bg-brightness': '0.55',
-      '--fl-bg-scale':      '1.4',
-      '--fl-tint-image': `
-        linear-gradient(180deg, rgba(0,0,0,0.15), rgba(0,0,0,0.45)),
-        radial-gradient(ellipse 90% 65% at 50% 50%, var(--accent-glow), transparent 65%)`,
-      '--fl-text-color':    '#fff',
-      '--fl-text-size':     '32px',
-      '--fl-text-weight':   '700',
-      '--fl-text-shadow':   '0 2px 14px rgba(0,0,0,0.5), 0 0 22px var(--accent-glow)',
-    },
-  },
-
-  // ---------- stage · dust (落灰 — settling luminous motes) -----------------
-  // Persistent particle system: tiny warm-tinted motes drift down like dust.
-  // Each line change spawns a burst of extra particles. Overlay mode on top
-  // of the normal stage layout.
-  {
-    name: 'dust', label: '落灰', window: 'ambient',
-    layout: 'stage', reveal: 'ink', three: 'dust',
-    tokens: {
-      '--fl-bg-blur':       '42px',
-      '--fl-bg-saturate':   '1.1',
-      '--fl-bg-brightness': '0.35',
-      '--fl-bg-scale':      '1.35',
-      '--fl-tint-image': `
-        linear-gradient(180deg, rgba(10,8,6,0.25), rgba(10,8,6,0.60)),
-        radial-gradient(ellipse 80% 60% at 50% 50%, var(--accent-glow), transparent 70%)`,
-      '--fl-text-color':    '#efe7d8',
-      '--fl-text-size':     '32px',
-      '--fl-text-weight':   '700',
-      '--fl-letter-spacing':'1px',
-      '--fl-text-shadow':   '0 2px 10px rgba(0,0,0,0.6), 0 0 20px rgba(0,0,0,0.4)',
     },
   },
 
@@ -530,42 +455,6 @@ const THEMES = [
     },
   },
 
-  // ---------- conversation · duet / 对唱 ----------
-  // Two voices alternating: even lines speak in accent (left), odd lines in
-  // accent-comp (right). Past bubbles keep their side color faintly so the
-  // back-and-forth stays legible scrolling up.
-  {
-    name: 'duet', label: '对唱', window: 'card',
-    layout: 'conversation', reveal: 'none',
-    customClass: true,
-    tokens: {
-      // Two-voice variant uses the cover too, but pulled even darker — the
-      // duet bubbles span both accent and accent-comp, so any single-hue bg
-      // tint is guaranteed to clash with one of them. Heavy desat + dark
-      // vignette keeps the bg as ambient haze rather than a competing color.
-      '--fl-bg-color':      '#0a0810',
-      '--fl-bg-blur':       '52px',
-      '--fl-bg-saturate':   '1.1',
-      '--fl-bg-brightness': '0.32',
-      '--fl-bg-scale':      '1.42',
-      '--fl-tint-image': `
-        linear-gradient(180deg, rgba(0,0,0,0.22), rgba(0,0,0,0.55)),
-        radial-gradient(ellipse 70% 45% at 25% 25%, var(--accent-glow), transparent 70%),
-        radial-gradient(ellipse 70% 45% at 75% 75%, var(--accent-comp-soft), transparent 70%)`,
-      '--fl-text-font':     '-apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", "Hiragino Sans", system-ui, sans-serif',
-      '--fl-text-color':    '#f4f0e8',
-      '--fl-text-size':     '13px',
-      '--fl-text-weight':   '600',
-      '--fl-text-shadow':   'none',
-      '--fl-letter-spacing':'0.2px',
-      '--fl-chrome-bg':     'rgba(255,255,255,0.03)',
-      '--fl-chrome-fg':     '#f0ece4',
-      '--fl-chrome-border': 'rgba(255,255,255,0.06)',
-      '--fl-chrome-artist': 'rgba(255,255,255,0.5)',
-    },
-  },
-
-
   // ---------- triplet · minimal (Apple Music look) ----------
   {
     name: 'minimal', label: 'Apple Music', window: 'wide',
@@ -583,7 +472,7 @@ const THEMES = [
   },
 
   // ======================================================================
-  //  v2 themes (opt-in, additive). See V2_THEMES_NOTES.md.
+  //  v2 themes (opt-in, additive).
   // ======================================================================
 
   // ---------- stage · flip (Solari split-flap / 翻牌) ----------------------

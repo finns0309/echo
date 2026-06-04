@@ -237,7 +237,6 @@ function processSpectrumOnset() {
     const velocity = Math.min(1, 0.6 + flux * 1.2);
     pulseSoloOnset(velocity, centroid);
     window.FL_FX?.pulseRipple?.(velocity);
-    flashLightning(velocity);
     if (n) {
       const primaryIdx = Math.floor(centroid * n) + jitter();
       strikeKey(primaryIdx, velocity);
@@ -322,11 +321,10 @@ function applyPianoFrame() {
   const isPiano  = document.body.classList.contains('theme-piano');
   const isSolo   = document.body.classList.contains('theme-instrumental');
   const isRipple = document.body.classList.contains('theme-ripple');
-  const isStorm  = document.body.classList.contains('theme-storm');
   // Run the onset detector whenever any spectrum-driven theme is active.
-  // Piano (key strikes), solo (particle bursts), ripple (water rings), and
-  // storm (lightning) all consume the same detector — one run per frame.
-  if (isPiano || isSolo || isRipple || isStorm) processSpectrumOnset();
+  // Piano (key strikes), solo (particle bursts), and ripple (water rings)
+  // all consume the same detector — one run per frame.
+  if (isPiano || isSolo || isRipple) processSpectrumOnset();
   if (pianoKeys) {
     for (const k of pianoKeys) {
       k.level *= PIANO_DECAY;
@@ -344,7 +342,6 @@ const OUT_DURATION_MS = 280; // how long to dwell in "changing" state before swa
 // (floating cards) or the triplet/single DOM. We check the data-layout
 // attribute on body (written by applyTheme) instead of matching on name.
 function usesStage() { return document.body.dataset.layout === 'stage'; }
-let active3DDriver = null;
 
 // Stage-layout themes render into #stage: each line becomes an absolutely-
 // positioned card stacked in the center. Old cards keep floating upward with
@@ -655,44 +652,6 @@ function spawnDanmaku(line) {
   dm.appendChild(el);
 }
 
-// ─── Three.js 3D engine bootstrap ──────────────────────────────────────────
-function loadScript(src) {
-  return new Promise((resolve, reject) => {
-    if (document.querySelector(`script[src="${src}"]`)) { resolve(); return; }
-    const s = document.createElement('script');
-    s.src = src;
-    s.onload = resolve;
-    s.onerror = reject;
-    document.body.appendChild(s);
-  });
-}
-let threeEngineLoaded = false;
-const threeDriversLoaded = new Set();
-async function ensureThreeEngine() {
-  if (threeEngineLoaded) return;
-  await loadScript('vendor/three.global.js');
-  await loadScript('three-engine.js');
-  threeEngineLoaded = true;
-}
-const THREE_DRIVER_SCRIPTS = {
-  shatter: 'three-driver-shatter.js',
-  dust:    'three-driver-dust.js',
-};
-async function init3DTheme(driverName) {
-  const cvs = document.getElementById('three-canvas');
-  if (!cvs) return;
-  await ensureThreeEngine();
-  if (!threeDriversLoaded.has(driverName) && THREE_DRIVER_SCRIPTS[driverName]) {
-    await loadScript(THREE_DRIVER_SCRIPTS[driverName]);
-    threeDriversLoaded.add(driverName);
-  }
-  window.FL_3D.init(cvs);
-  window.FL_3D.activate(driverName);
-  if (!state.lines.length) {
-    window.FL_3D.renderLine(currEl.textContent || '等待播放…');
-  }
-}
-
 // ─── Sakura · falling petals ───────────────────────────────────────────────
 // One DOM element per petal, animated by a CSS keyframe. We build a pool once
 // (idempotent — re-applying the theme doesn't double up) and let CSS drive
@@ -716,28 +675,6 @@ function buildSakuraPool() {
     p.style.setProperty('--rot',   ((Math.random() - 0.5) * 360).toFixed(0) + 'deg');
     root.appendChild(p);
   }
-}
-
-// ─── Storm · lightning flash on onset ──────────────────────────────────────
-// CSS handles heavy rain hatching via the tint layer. Lightning is a separate
-// concern: a brief whole-screen flash, fired only on hard onsets so it's
-// dramatic rather than constant. We throttle to avoid epilepsy-territory rates.
-let lastLightningAt = 0;
-function flashLightning(velocity) {
-  if (!document.body.classList.contains('theme-storm')) return;
-  // Onset velocities cluster in 0.68–0.85 (see processSpectrumOnset). Threshold
-  // at 0.78 catches noticeable hits without firing on every kick drum, and
-  // pairs with the 2.2s cooldown so lightning still feels rare/dramatic.
-  if (velocity < 0.78) return;
-  const now = Date.now();
-  if (now - lastLightningAt < 2200) return;
-  lastLightningAt = now;
-  const el = document.getElementById('lightning');
-  if (!el) return;
-  el.classList.remove('flash');
-  // Force reflow so re-adding the class restarts the animation.
-  void el.offsetWidth;
-  el.classList.add('flash');
 }
 
 // ─── Solo · instrumental visualizer (canvas spectrum + particle cloud) ────
@@ -1015,9 +952,6 @@ function renderAt(t) {
   const prv = i - 1 >= 0 ? state.lines[i - 1] : null;
   const nxt = i + 1 < state.lines.length ? state.lines[i + 1] : null;
 
-  // 3D overlay: notify engine on every line change (both pure-3D and overlay modes).
-  if (active3DDriver) window.FL_3D?.renderLine(cur?.text || '♪');
-
   if (document.body.dataset.layout === 'danmaku') {
     if (cur) spawnDanmaku(cur);
     return;
@@ -1027,9 +961,6 @@ function renderAt(t) {
     if (cur) spawnConvBubble(cur);
     return;
   }
-
-  // Pure 3D layout: skip DOM rendering entirely.
-  if (document.body.dataset.layout === 'three') return;
 
   if (usesStage()) {
     // Pass the whole line so renderStage can stamp karaoke timings on tokens.
@@ -1099,24 +1030,6 @@ function extractAccent(url) {
   });
 }
 
-function rgbToHsl(r, g, b) {
-  r /= 255; g /= 255; b /= 255;
-  const mx = Math.max(r, g, b), mn = Math.min(r, g, b);
-  const l = (mx + mn) / 2;
-  let h = 0, s = 0;
-  if (mx !== mn) {
-    const d = mx - mn;
-    s = l > 0.5 ? d / (2 - mx - mn) : d / (mx + mn);
-    switch (mx) {
-      case r: h = (g - b) / d + (g < b ? 6 : 0); break;
-      case g: h = (b - r) / d + 2; break;
-      case b: h = (r - g) / d + 4; break;
-    }
-    h *= 60;
-  }
-  return [Math.round(h), Math.round(s * 100), Math.round(l * 100)];
-}
-
 async function applyAccentFromCover(url) {
   if (!url) return;
   if (url === lastAccentUrl) return; // same cover → tokens/fx already set
@@ -1133,13 +1046,6 @@ async function applyAccentFromCover(url) {
   document.body.style.setProperty('--accent-soft', `rgba(${r}, ${g}, ${b}, 0.55)`);
   document.body.style.setProperty('--accent-glow', `rgba(${r}, ${g}, ${b}, 0.35)`);
   document.body.style.setProperty('--ambient', `rgb(${ar}, ${ag}, ${ab})`);
-  // Complementary hue for two-voice themes (duet etc). Cheap rgb→hsl, then
-  // shift hue by 180° and round-trip back so themes can interpolate against
-  // either accent without computing themselves.
-  const [hh, ss, ll] = rgbToHsl(r, g, b);
-  const compHue = (hh + 180) % 360;
-  document.body.style.setProperty('--accent-comp',      `hsl(${compHue} ${ss}% ${ll}%)`);
-  document.body.style.setProperty('--accent-comp-soft', `hsl(${compHue} ${ss}% ${ll}% / 0.55)`);
   window.FL_FX?.setColors([r, g, b], [ar, ag, ab]);
 }
 
@@ -1170,7 +1076,6 @@ function commitTrack(np, lines, cover, elapsed, rate) {
   state.rate = 1;
 
   if (!lines.length) {
-    if (active3DDriver) window.FL_3D?.renderLine(np.title);
     if (usesStage()) {
       stageEl.innerHTML = '';
       renderStage(np.title);
@@ -1208,7 +1113,6 @@ async function pollNowPlaying() {
       nextEl.textContent = '';
       // Stage layouts don't touch prev/curr/next — without this, the last
       // lyric card keeps floating in place as if the song were still playing.
-      if (active3DDriver) window.FL_3D?.renderLine(msg);
       if (usesStage()) {
         stageEl.innerHTML = '';
         renderStage(msg);
@@ -1376,14 +1280,6 @@ function applyTheme(name) {
   // 4b) Theme-specific DOM prep. Piano lazily builds its key strip once.
   if (name === 'piano') buildPianoKeys();
   if (name === 'sakura') buildSakuraPool();
-  active3DDriver = theme.three || null;
-  if (theme.three) {
-    document.body.dataset.three = theme.three;
-    init3DTheme(theme.three);
-  } else {
-    delete document.body.dataset.three;
-    window.FL_3D?.deactivate();
-  }
   if (theme.layout === 'conversation') { buildConvScaffold(); refreshConvHeader(); }
   if (theme.layout === 'solo') {
     ensureSoloCanvas();

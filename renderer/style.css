@@ -47,8 +47,6 @@
   --accent:       rgb(255, 230, 210);
   --accent-soft:  rgba(255, 230, 210, 0.5);
   --accent-glow:  rgba(255, 230, 210, 0.35);
-  --accent-comp:      hsl(200 60% 70%);
-  --accent-comp-soft: hsl(200 60% 70% / 0.55);
   --ambient:      rgb(40, 40, 60);
 
   /* Cover URL, written by app.js from the live track's cover. Themes that
@@ -535,30 +533,6 @@ body[data-layout="danmaku"] #tint,
 body[data-layout="danmaku"] #fx { display: none; }
 body[data-layout="danmaku"] #danmaku { display: block; }
 
-/* Three.js canvas — shown whenever a 3D driver is active (data-three on body).
-   For pure-3D layout (layout="three") it replaces DOM lyrics entirely.
-   For overlay mode (e.g. stage + three) it layers particles on top. */
-body[data-layout="three"] #lyrics,
-body[data-layout="three"] #stage,
-body[data-layout="three"] #cover-panel { display: none; }
-body[data-three] #three-canvas { display: block; }
-
-#three-canvas {
-  display: none;
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  z-index: 6;
-  pointer-events: none;
-}
-
-/* Shatter: suppress the normal CSS leave animation — Three.js handles exit. */
-body[data-three="shatter"] .stage-card.leaving {
-  opacity: 0 !important;
-  transition: opacity 80ms linear !important;
-}
-
 /* triplet default look — prev/next muted, curr emphasized */
 body[data-layout="triplet"] .line {
   /* filter is in the list now so the changing-state blur(1px) eases in/out
@@ -1001,46 +975,7 @@ body.theme-sakura #sakura { display: block; }
   50%      { margin-left:  16px; }
 }
 
-/* ----- storm · heavy rain + lightning ----- */
-/* Lightning is a single full-canvas div that gets .flash added on hard onsets
-   (see flashLightning in app.js). The flash animation is short (~280ms) and
-   uses opacity rather than display so the GPU can transition smoothly. */
-#lightning {
-  display: none;
-  position: absolute; inset: 0;
-  z-index: 4;
-  pointer-events: none;
-  background: linear-gradient(180deg,
-              rgba(220, 230, 255, 0.55) 0%,
-              rgba(200, 220, 255, 0.18) 60%,
-              transparent 100%);
-  opacity: 0;
-}
-body.theme-storm #lightning { display: block; }
-#lightning.flash {
-  animation: lightning-flash 280ms ease-out forwards;
-}
-@keyframes lightning-flash {
-  /* Two-stroke flash — the classic "flash, dim, flash again" lightning feel. */
-  0%   { opacity: 0;    }
-  10%  { opacity: 0.95; }
-  30%  { opacity: 0.25; }
-  45%  { opacity: 0.85; }
-  100% { opacity: 0;    }
-}
-/* Rain animation: only the two repeating-linear-gradient layers slide; the
-   solid darkening layer underneath stays fixed. Larger drift than piano's
-   rain to read as "harder downpour". */
-@keyframes storm-rain {
-  0%   { background-position: 0 0, 0 0,         0 0; }
-  100% { background-position: 0 0, -90px 320px, -54px 220px; }
-}
-/* Storm body chrome: heavier rain than piano, darker base. */
-body.theme-storm {
-  --radius: 14px;
-}
-
-/* ----- conversation · shared bubble stream (imsg + duet) ----- */
+/* ----- conversation · shared bubble stream (imsg) ----- */
 /* The container fills the canvas top-to-bottom; stream is justify-end so new
    messages anchor at the bottom and older ones drift up. JS prunes leading
    children to keep at most CV_MAX bubbles in the DOM. */
@@ -1171,52 +1106,6 @@ body.theme-imsg #convo .cv-typing[data-side="R"] {
   border-radius: 14px 14px 14px 4px;
 }
 
-/* ----- duet · two voices, alternating sides + complementary colors ----- */
-/* Side L (even line index) speaks in accent; side R speaks in accent-comp.
-   Past bubbles keep their side color faintly so the visual rhythm of the
-   conversation stays legible as you scroll up. */
-/* Push the name/status block past the second (overlapping) avatar so it
-   doesn't get covered. The pseudo-element extends ~60% of the avatar width
-   to the right; reserve that space here. */
-body.theme-duet #convo .cv-avatar { margin-right: calc(18px * var(--fl-scale, 1)); }
-body.theme-duet .cv-bubble[data-side="L"] {
-  align-self: flex-start;
-  border-radius: 14px 14px 14px 4px;
-}
-body.theme-duet .cv-bubble[data-side="R"] {
-  align-self: flex-end;
-  border-radius: 14px 14px 4px 14px;
-}
-body.theme-duet .cv-bubble.now[data-side="L"] {
-  --bg: linear-gradient(135deg, var(--accent), var(--accent-soft));
-  box-shadow: 0 2px 12px var(--accent-glow);
-}
-body.theme-duet .cv-bubble.now[data-side="R"] {
-  --bg: linear-gradient(135deg, var(--accent-comp), var(--accent-comp-soft));
-  box-shadow: 0 2px 12px var(--accent-comp-soft);
-}
-body.theme-duet .cv-bubble.past[data-side="L"] {
-  --bg: hsl(from var(--accent) h s l / 0.18);
-  --fg: rgba(255,255,255,0.78);
-}
-body.theme-duet .cv-bubble.past[data-side="R"] {
-  --bg: hsl(from var(--accent-comp) h s l / 0.18);
-  --fg: rgba(255,255,255,0.78);
-}
-/* Two-avatar header: clone the avatar visually via ::after, offset for the
-   classic group-chat overlap. */
-body.theme-duet #convo .cv-avatar {
-  position: relative;
-}
-body.theme-duet #convo .cv-avatar::after {
-  content: '';
-  position: absolute;
-  left: 60%; top: 0;
-  width: 100%; height: 100%;
-  border-radius: 999px;
-  background: linear-gradient(135deg, var(--accent-comp), var(--accent-comp-soft));
-  border: 1.5px solid var(--fl-bg-color, #14101a);
-}
 /* ----- subtitle · transparent desktop lyric strip ----- */
 body.theme-subtitle {
   --radius: 12px;
