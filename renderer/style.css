@@ -613,10 +613,6 @@ body.theme-danmaku {
   flex-shrink: 0;
 }
 #convo .cv-typing.show { opacity: 1; transform: translateY(0); }
-#convo .cv-typing[data-side="R"] {
-  align-self: flex-end;
-  border-radius: 14px 14px 4px 14px;
-}
 #convo .cv-typing i {
   width: 6px; height: 6px; border-radius: 999px;
   background: rgba(255,255,255,0.6);
@@ -634,13 +630,6 @@ body.theme-danmaku {
    gradient with a soft glow; older bubbles muted. */
 body.theme-imsg .cv-bubble { align-self: flex-start; border-radius: 14px 14px 14px 4px; }
 body.theme-imsg .cv-bubble.past { opacity: 0.78; }
-/* Single-voice: typing dots are always the singer's, so they live on the
-   left. Override the data-side="R" right-alignment that duet uses. */
-body.theme-imsg #convo .cv-typing,
-body.theme-imsg #convo .cv-typing[data-side="R"] {
-  align-self: flex-start;
-  border-radius: 14px 14px 14px 4px;
-}
 
 /* ----- subtitle · transparent desktop lyric strip ----- */
 body.theme-subtitle {

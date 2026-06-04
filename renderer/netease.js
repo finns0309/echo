@@ -12,7 +12,7 @@ const HEADERS = {
 // Bounded by MAX_ENTRIES; oldest key evicted on overflow.
 const MAX_ENTRIES = 128;
 const searchCache = new Map(); // key: `${title}|${artist}` → { id, cover }
-const lyricCache  = new Map(); // key: songId → { lrc, tlyric }
+const lyricCache  = new Map(); // key: songId → { lrc }
 
 function cachePut(map, key, value) {
   if (map.has(key)) map.delete(key);
@@ -84,20 +84,11 @@ async function searchSong(title, artist, duration) {
 async function fetchLyric(songId) {
   const hit = cacheGet(lyricCache, songId);
   if (hit) return hit;
-  // yv=-1 requests yrc (per-character timing). Not every song has it; major-label
-  // tracks usually do, indie / instrumental do not. Consumers must tolerate ''.
-  const url = `https://music.163.com/api/song/lyric?id=${songId}&lv=1&tv=-1&yv=-1`;
+  // lv=1 = the standard LRC track. echo only renders line-level lyrics now, so
+  // we no longer request tv (translation) or yv (per-char karaoke timing).
+  const url = `https://music.163.com/api/song/lyric?id=${songId}&lv=1`;
   const j = await fetchJSON(url);
-  const out = {
-    lrc:    j?.lrc?.lyric    || '',
-    tlyric: j?.tlyric?.lyric || '',
-    yrc:    j?.yrc?.lyric    || '',
-    // NetEase's authoritative instrumental flag. Some pure-music tracks still
-    // ship a fake "lrc" containing only "[00:05.00]纯音乐，请欣赏" plus the
-    // composer credit; we trust this top-level flag over parsing the body.
-    pureMusic: !!j?.pureMusic,
-  };
-  return cachePut(lyricCache, songId, out);
+  return cachePut(lyricCache, songId, { lrc: j?.lrc?.lyric || '' });
 }
 
 window.Netease = { searchSong, fetchLyric };

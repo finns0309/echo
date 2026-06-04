@@ -50,14 +50,8 @@ function spawnConvBubble(line) {
   const prevNow = stream.querySelector('.cv-bubble.now');
   if (prevNow) { prevNow.classList.remove('now'); prevNow.classList.add('past'); }
 
-  // data-side rides on the bubble as generic metadata; imsg pins everything
-  // left via CSS, so the L/R parity is cosmetic-only for the single-voice theme.
-  const idx = state.lastIdx >= 0 ? state.lastIdx : 0;
-  const side = (idx % 2 === 0) ? 'L' : 'R';
-
   const b = document.createElement('div');
   b.className = 'cv-bubble now fresh';
-  b.dataset.side = side;
   b.textContent = text;
   stream.appendChild(b);
   // Drop fresh class on the next frame so the entrance transition kicks in.
@@ -78,11 +72,9 @@ function applyConvGap(t) {
   const last = state.lines[i];
   const next = state.lines[i + 1];
   if (!last || !next) { typing.classList.remove('show'); return; }
-  // Use yrc duration when present, else fall back to gap-to-next.
-  const lineDur = last.duration || (next.time - last.time);
+  // Show typing dots in the gap after the current line ends, before the next.
+  const lineDur = next.time - last.time;
   const inGap = t > last.time + lineDur * 0.7 && t < next.time - 0.05;
-  // Side mirrors the *next* speaker so dots appear where the new bubble will land.
-  typing.dataset.side = ((i + 1) % 2 === 0) ? 'L' : 'R';
   typing.classList.toggle('show', inGap);
 }
 

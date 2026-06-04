@@ -57,29 +57,17 @@ async function fetchLyricsFor(np) {
       id = found.id;
       cover = cover || found.cover;
     }
-    const { lrc, tlyric, yrc, pureMusic } = await fetchLyricSafe(id);
-    // buildKaraoke gives us a unified model: every line has a chars[] with
-    // {time, duration, text}, real (yrc) or synthesized (from LRC). Karaoke
-    // reveal animations consume this; older reveals just see line.text and
-    // ignore the rest.
-    const lines = LRC.buildKaraoke(lrc, tlyric, yrc);
-    // Track classification, used by effectiveTheme() for auto-switching.
-    //  - instrumental: NetEase explicitly flagged pureMusic. Authoritative.
-    //  - unmatched:    no lyrics returned at all (search hit may be wrong).
-    //  - lyrical:      everything else (real song with lyrics, even short ones).
-    let kind = 'lyrical';
-    if (pureMusic) kind = 'instrumental';
-    else if (!lines.length) kind = 'unmatched';
-    return { lines, cover, kind };
+    const { lrc } = await fetchLyricSafe(id);
+    return { lines: LRC.parseLRC(lrc), cover };
   } catch (e) {
     console.error(e);
-    return { lines: [], cover: null, kind: 'unmatched' };
+    return { lines: [], cover: null };
   }
 }
 
 async function fetchLyricSafe(id) {
   try { return await Netease.fetchLyric(id); }
-  catch { return { lrc: '', tlyric: '', yrc: '', pureMusic: false }; }
+  catch { return { lrc: '' }; }
 }
 
 let pendingSwap = null;
@@ -569,16 +557,6 @@ document.getElementById('maximize').addEventListener('click', async () => {
   if (btn) btn.textContent = maxed ? '⤡' : '⤢';
 });
 document.getElementById('close').addEventListener('click', () => window.api.quit());
-
-// Manual sync nudges. Shift the local lyric clock by ±0.2s.
-// Positive = lyrics jump ahead (useful when lyrics lag behind the song).
-function nudge(delta) {
-  state.elapsed += delta;
-  // Force re-render of current line even if the index technically didn't change
-  state.lastIdx = -2;
-}
-document.getElementById('fwd').addEventListener('click', () => nudge(+0.2));
-document.getElementById('back').addEventListener('click', () => nudge(-0.2));
 
 // In click-through mode the window still receives mousemove (forward:true).
 // Temporarily disable ignore when hovering the controls so buttons stay clickable.
