@@ -2,15 +2,17 @@
 
 桌面悬浮歌词 · macOS · [muse](https://github.com/finns0309/muse) 的可视层。
 
-`echo` 不是一个完整的播放器，它只负责"音乐愿意留在屏幕上的样子"——歌词、封面氛围、按主题切换的窗框。播放本身交给 `muse`。
+`echo` 不是一个完整的播放器，它只负责"音乐愿意留在屏幕上的样子"——歌词、封面氛围、按主题切换的窗框。播放本身交给 `muse`，`echo` 只读不控。
 
 ```text
-muse                       echo
-持有 audio + library   →    悬浮歌词 + 视觉氛围
-GET /now (HTTP)
+muse                            echo
+持有 audio + library   ──/now──────▶   悬浮歌词 + 视觉氛围
+                       └─/spectrum─┘    （音频反应引擎，休眠待用）
 ```
 
-## 搭配 muse（推荐）
+## 运行（需要 muse）
+
+`echo` 是 `muse` 的**纯消费端**——只读 `muse` 在 `127.0.0.1:10755` 广播的播放状态，自己不碰音频源。先让 `muse` 跑起来：
 
 ```bash
 git clone git@github.com:finns0309/echo.git
@@ -19,44 +21,28 @@ npm install
 npm start
 ```
 
-`muse` 已经在跑的话，`echo` 启动后会自动连上 `127.0.0.1:10755/now` —— 直接拿到准确的 `songId`、`currentTime` 和封面，不用猜歌也不用猜进度。
-
-## 独立跑（兜底模式）
-
-没有 `muse` 时，`echo` 会退到 `nowplaying-cli`（封装 macOS MediaRemote）读官方 Now Playing：
-
-```bash
-brew install nowplaying-cli
-npm start
-```
-
-代价：
-
-- 官方客户端事件稀疏，`elapsedTime` 经常卡住或缺失
-- 只能拿到 title / artist，要去网易云公开接口模糊搜歌、容易匹配到错误版本
-- 启动后菜单栏会出现"后备模式"角标提醒你正在走这条路
-
-够用，但 `muse` 在线时体验显著更好。
+启动后 `echo` 自动连上 `/now`，拿到准确的 `songId`、`currentTime` 和封面——不用猜歌、也不用猜进度。`muse` 没在跑时，`echo` 显示待播状态。
 
 ## 使用
 
-- 拖动窗口主体即可移动；右上 `◌` 切鼠标穿透（变 `●` 后窗口不拦截点击，像贴纸贴在桌面上），右上 `×` 退出
-- 菜单栏 `♪` 图标：切主题、按场景切换（纯音乐自动用 visualizer）、重置该主题的窗口、退出
-- **按主题决定窗框**——切到 `流体` 自动全屏可交互，切到 `弹幕` 自动全屏穿透，切到 `短信` 自动右侧竖卡，切到 `字幕` 自动贴底。手动拖大 / 改穿透状态的偏好会按主题记住
+- 拖动窗口主体即可移动；右上 `◌` 切鼠标穿透（变 `●` 后窗口不拦截点击，像贴纸贴在桌面上），`⤢` 铺满 / 还原，`×` 退出
+- 菜单栏 `♪` 图标：切主题、重置该主题的窗口、显示 / 隐藏、退出
+- **按主题决定窗框**——切到 `流体` 自动全屏可交互，`弹幕` 自动全屏穿透，`短信` 自动右侧竖卡，`字幕` 自动贴底。手动拖大 / 改穿透状态的偏好会按主题记住
 
-## 主题概览
+## 六个主题
 
-18 个，分布在六种 layout 上：
+| 主题 | layout | 窗框 | 一句话 |
+|---|---|---|---|
+| 打字机 | stage | headline · 顶居中 | 纸张 + 等宽 + 逐字光标 |
+| 水墨 | stage | headline · 顶居中 | 衬线书法，blur 晕开 |
+| 流体 | stage | ambient · 全屏 | WebGL fbm 流体背景 |
+| 字幕 | single | subtitle-strip · 贴底 | 不抢戏的桌面字幕条 |
+| 弹幕 | danmaku | overlay · 全屏穿透 | 歌词像 B 站弹幕飘过桌面 |
+| 短信 | conversation | card · 右侧竖卡 | 歌词逐句变成 iMessage 气泡 |
 
-- `stage` — 浮动卡片：波浪 / 打字机 / 水墨 / 字弹 / 樱花 / 暴雨 / 流体 / 水波
-- `triplet` — 上一句 / 当前 / 下一句：封套（Folia 风）/ Apple Music
-- `single` — 只显示当前句：神光 / 流光页 / 雨夜钢琴
-- `conversation` — iMessage 式对话流：短信 / 对唱
-- `solo` — 纯音乐 visualizer：纯音乐
-- `danmaku` — 桌面弹幕：弹幕
-- 加上 `subtitle` 单句字幕条
+加新主题大多数时候只是往 `renderer/themes.js` 加一条；详见 [ARCHITECTURE.md](./ARCHITECTURE.md)。
 
-每个主题挂在一个 *window profile* 上（headline / wide / card / subtitle-strip / ambient / overlay），决定窗口尺寸 + 是否默认穿透。详见 [ARCHITECTURE.md](./ARCHITECTURE.md) §3.
+> 早期版本有 24 个主题（含 three.js 字碎、雨夜钢琴、纯音乐 visualizer 等）。2026-06 收敛到这 6 个常用的，并去掉了 `nowplaying-cli` 兜底（现在 muse-only）。驱动音频反应主题的 **spectrum + onset 引擎**作为基础设施保留下来、休眠待用，将来要做听声音的主题直接 `FL_AUDIO.onOnset(cb)` 订阅即可——见 [AUDIO_ANALYSIS.md](./AUDIO_ANALYSIS.md)。
 
 ## 维护文档
 
@@ -67,8 +53,6 @@ npm start
 
 ## 已知坑
 
-- 兜底模式下，纯器乐 / 冷门曲目可能搜不到，只显示歌名
-- 兜底模式下，网易云 Mac 客户端偶尔不上报 Now Playing，先在客户端切一下歌可以触发
 - macOS 真·全屏（Spaces 那种）的视频播放器会盖住 echo——这是 `'floating'` 层级的预期代价，换来菜单栏弹层不被歌词遮住
 
 ## 与 notch-cat 的联动

@@ -10,7 +10,9 @@
 // Protocol: ./NOW_PLAYING.md §Spectrum channel. Diagnostics: window.__piano.
 //
 // Public API: window.FL_AUDIO = {
-//   frame()              per-rAF tick — runs the detector only if a handler is registered
+//   frame()              per-rAF tick — runs the onset detector (cheap: only does
+//                        real work on a fresh spectrum frame), dispatching onsets
+//                        to any registered handlers
 //   onOnset(cb)          register (velocity, centroid) => {...} for onsets
 //   getFrame()           latest cached spectrum frame (or null)
 // }
@@ -117,7 +119,10 @@ window.__piano = {
 connectSpectrum();
 
 window.FL_AUDIO = {
-  frame() { if (onsetHandlers.length) processOnset(); },
+  // Runs every tick. processOnset early-returns unless muse pushed a fresh
+  // frame, so this stays cheap; it keeps __piano diagnostics live even with no
+  // consumer, and dispatches onsets to handlers when a theme has registered one.
+  frame() { processOnset(); },
   onOnset(cb) { if (typeof cb === 'function') onsetHandlers.push(cb); },
   getFrame() { return spectrumFrame; },
 };

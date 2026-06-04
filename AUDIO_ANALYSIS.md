@@ -1,8 +1,10 @@
 # Audio Analysis
 
-How echo turns muse's raw audio stream into "it feels like it's
-listening to the music". Written as a reference for future-you so you don't
-have to derive it again next time you want a theme to react to sound.
+How echo turns muse's raw audio stream into "it feels like it's listening to
+the music". The spectrum + onset engine (`renderer/audio.js`) is kept live but
+**dormant** — no current theme consumes it. This is the reference so you don't
+have to re-derive the DSP next time you want a theme to react to sound; wire a
+new consumer with `FL_AUDIO.onOnset((velocity, centroid) => …)`.
 
 ## What we're tracking: onset, not beat
 
@@ -62,14 +64,14 @@ cases. But plain spectral flux is ~85% as good as the state of the art with
 No selection, no filtering, no "this looks like a beat" heuristic. Pure 30
 fps stream. See `./NOW_PLAYING.md §Spectrum channel` for the wire format.
 
-**All intelligence lives in the consumer** (`renderer/app.js`
-`processSpectrumOnset`):
+**All intelligence lives in the consumer side** (`renderer/audio.js`, the
+`processOnset` detector — currently dormant, results delivered via
+`FL_AUDIO.onOnset`):
 
 - Compute spectral flux from the stream
 - Threshold + minimum-gap throttle
-- Estimate spectral centroid for pitch placement
-- Decide velocity, chord companions, occasional sparkle
-- Maintain per-key decay envelope
+- Estimate spectral centroid for pitch / position bias
+- Emit `(velocity, centroid)` to whatever handlers are registered
 
 ### Why this split matters
 
@@ -86,11 +88,11 @@ fps stream. See `./NOW_PLAYING.md §Spectrum channel` for the wire format.
   producer just keeps pushing — next tick always gets the freshest
   snapshot. No catch-up logic needed.
 
-## The piano implementation, annotated
+## Worked example: the piano consumer (retired, but illustrative)
 
-Piano is the most demanding consumer of the spectrum stream so far (every
-theme after it will be easier). Three channels feed the same per-key decay
-envelope:
+The `雨夜钢琴` theme — since cut — was the most demanding consumer of the stream,
+and is still the best worked example of what an `onOnset` handler can drive. It
+fed three channels into one per-key decay envelope:
 
 1. **Hard onset** — `flux > PIANO_ONSET_FLUX` triggers 1–3 keys near the
    spectral centroid with a Gaussian ±4-key jitter; louder onsets add an
@@ -103,9 +105,9 @@ envelope:
    change. Provides musical accent even in silent passages or when muse
    is absent.
 
-All three channels write to `pianoKeys[i].level` via `strikeKey()`; decay
-(`level *= 0.96` per frame ≈ 1.5 s half-life) is uniform regardless of
-source. One smoothing pipeline, three producers.
+All three channels wrote to one `level` per key; decay (`level *= 0.96` per
+frame ≈ 1.5 s half-life) was uniform regardless of source. One smoothing
+pipeline, three producers — the pattern any future onset consumer can copy.
 
 ## Diagnosing
 
@@ -114,10 +116,8 @@ Open DevTools on the echo window, type `__piano`:
 - `__piano.ws` — WebSocket state: `1` = open, `3` = closed
 - `__piano.frames` — frames received since load (should climb by ~30/s)
 - `__piano.frame` — most recent frame (`{ t, bands, rms, stateVersion }`)
-- `__piano.flux` — last computed spectral flux (tune `PIANO_ONSET_FLUX`
+- `__piano.flux` — last computed spectral flux (tune the onset threshold
   against this)
-- `__piano.strikes` — cumulative strike count
-- `__piano.keys` — live per-key level array
 
 Typical values on well-produced pop: `rms` 0.25–0.55, `flux` 0.05–0.4
 with short spikes to 1.0+ on drum hits. If `frames` isn't climbing, the

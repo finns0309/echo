@@ -80,16 +80,18 @@ echo runs its own rAF clock between polls).
 
 ## Consumer implementation (echo)
 
-- `echo/main.js` — `callMuseOnce()` hits `/now`. On success it
-  returns `{ title, artist, album, elapsed, duration, rate, source: 'muse',
-  songId, cover }`. Non-muse source (`nowplaying-cli`) populates the same
-  shape from MediaRemote, minus the trustworthy fields.
-- `renderer/app.js` — when `source === 'muse'`, adopts `elapsed` every poll
-  and anchors `lastSyncAt` to `positionSampledAt` (so the 0–1s poll lag
-  doesn't leak into the rendered position). A change in `stateVersion`
-  forces a line re-render on the next frame. Otherwise (nowplaying-cli
-  fallback) it ignores `elapsed` and runs a local wall clock; the UI shows
-  a "后备" badge so the user knows the timeline isn't authoritative.
+echo is muse-only — there is no `nowplaying-cli` / MediaRemote fallback.
+
+- `echo/main.js` — `runNowPlaying()` is just `callMuseOnce()`, which hits
+  `/now` and returns `{ title, artist, album, elapsed, duration, rate,
+  source: 'muse', songId, cover, positionSampledAt, stateVersion }`, or `null`
+  when muse isn't up (echo then shows its idle state).
+- `renderer/app.js` — adopts `elapsed` every poll and anchors `lastSyncAt` to
+  `positionSampledAt` (so the 0–1s poll lag doesn't leak into the rendered
+  position). A change in `stateVersion` forces a line re-render on the next
+  frame.
+- `renderer/audio.js` — also opens the `/spectrum` WS (below). The onset
+  engine is kept live but dormant — no current theme consumes it.
 
 ## Spectrum channel (v1.2)
 
