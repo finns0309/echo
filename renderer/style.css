@@ -2,16 +2,15 @@
  *  Echo · component-style theming
  *  ────────────────────────────────────────────────────────────────────────
  *  Themes are composed from four orthogonal axes:
- *    - layout  (data-layout)   stage | triplet | single
+ *    - layout  (data-layout)   stage | single | conversation | danmaku
  *    - reveal  (data-reveal)   wave | typewriter | ink | none
- *    - frame   (data-frame)    full | cover-left
  *    - tokens  (CSS custom properties on <body>, --fl-*)
  *
  *  The registry is renderer/themes.js — one entry per theme. Most themes
  *  set tokens and nothing else. Themes flagged `customClass: true` also
  *  get `body.theme-<name>`, which this file uses for the few effects that
- *  tokens can't express (typewriter cursor, aura curr-line breathing,
- *  minimal left-aligned mask).
+ *  tokens can't express (typewriter cursor, subtitle strip, danmaku
+ *  transparency, imsg bubbles).
  *
  *  To add a new standard theme:
  *    1. Append an entry to renderer/themes.js.
@@ -21,7 +20,7 @@
  *  `body[data-reveal="<name>"] .stage-card .wi { animation: ... }` block
  *  under §REVEALS.
  *
- *  To add a new layout or frame: append cases under §LAYOUTS / §FRAMES.
+ *  To add a new layout: append cases under §LAYOUTS.
  * ========================================================================= */
 
 /* ========================================================================= */
@@ -172,31 +171,6 @@ body:hover #topbar { opacity: 1; transform: translateY(0); }
 #meta #title  { font-weight: 600; }
 #meta #artist { opacity: 0.62; font-weight: 400; color: var(--fl-chrome-artist, inherit); }
 
-/* Fallback-mode indicator. Hidden by default; only shown when muse is not
-   the source. Sits outside #topbar so it's visible at all times (topbar is
-   hover-gated) — the user shouldn't have to hover to learn the lyric
-   timeline isn't authoritative. */
-#source-badge {
-  display: none;
-  position: absolute;
-  top: 12px;
-  left: 50%;
-  transform: translateX(-50%);
-  padding: 3px 10px;
-  border-radius: 999px;
-  font-size: 10px;
-  letter-spacing: 0.4px;
-  color: rgba(255, 200, 120, 0.95);
-  background: rgba(120, 70, 20, 0.42);
-  border: 0.5px solid rgba(255, 180, 100, 0.4);
-  backdrop-filter: blur(14px) saturate(1.4);
-  -webkit-backdrop-filter: blur(14px) saturate(1.4);
-  cursor: help;
-  z-index: 5;
-  -webkit-app-region: no-drag;
-}
-body[data-source="mediaremote"] #source-badge { display: inline-block; }
-
 #buttons {
   -webkit-app-region: no-drag;
   display: flex;
@@ -263,7 +237,7 @@ body[data-source="mediaremote"] #source-badge { display: inline-block; }
 #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 
 /* ========================================================================= */
-/*  §LYRICS (triplet + single)                                               */
+/*  §LYRICS (single)                                                         */
 /* ========================================================================= */
 #lyrics {
   position: absolute; inset: 0;
@@ -408,86 +382,7 @@ body[data-reveal="ink"] .stage-card .wi {
   100% { opacity: 1;    filter: blur(0);    transform: translateY(0)   scale(1); }
 }
 
-/* glint · Folia-style bright sweep across the current line */
-body[data-reveal="glint"] .stage-card .w {
-  animation: glint-float var(--fd, 5.8s) ease-in-out infinite;
-  animation-delay: var(--fdelay, 0s);
-}
-body[data-reveal="glint"] .stage-card .wi {
-  opacity: 0;
-  filter: blur(16px) brightness(1.6);
-  transform: translateY(14px) scale(0.92);
-  animation: reveal-glint 1200ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
-  animation-delay: calc(var(--i) * 34ms);
-}
-@keyframes reveal-glint {
-  0%   { opacity: 0; filter: blur(16px) brightness(1.7); transform: translateY(14px) scale(0.92); text-shadow: none; }
-  42%  { opacity: 1; filter: blur(1px) brightness(1.35); transform: translateY(-3px) scale(1.05); text-shadow: 0 0 18px var(--accent), 0 0 34px var(--accent-glow); }
-  100% { opacity: 1; filter: blur(0) brightness(1); transform: translateY(0) scale(1); text-shadow: inherit; }
-}
-@keyframes glint-float {
-  0%, 100% { transform: translateY(0) rotate(0deg); }
-  45%      { transform: translateY(-5px) rotate(-0.3deg); }
-  70%      { transform: translateY(2px) rotate(0.2deg); }
-}
-
-/* karaoke · per-token timing-driven pop. Each .wi starts hidden and waits;
-   when JS adds .now (because the song reached this token's timestamp), the
-   keyframe fires once, throwing the token outward at a random angle/offset
-   (--rot, --dx written by renderStage) before settling. Reads as "every
-   character explodes out at its own moment" rather than the uniform-stagger
-   reveals above. Real yrc data drives this when available; synthetic timing
-   from line duration drives it when not. */
-body[data-reveal="karaoke"] .stage-card .w  { animation: none; }
-body[data-reveal="karaoke"] .stage-card .wi {
-  opacity: 0;
-  transform: translate(var(--dx, 0), 0.6em) scale(0.4) rotate(var(--rot, 0deg));
-  filter: blur(8px);
-  display: inline-block; /* required for transform on inline content */
-}
-body[data-reveal="karaoke"] .stage-card .wi.now {
-  animation: reveal-karaoke 720ms cubic-bezier(0.18, 1.7, 0.4, 1) forwards;
-}
-@keyframes reveal-karaoke {
-  0%   { opacity: 0;
-         transform: translate(var(--dx, 0), 0.6em) scale(0.4) rotate(var(--rot, 0deg));
-         filter: blur(8px); }
-  45%  { opacity: 1;
-         transform: translate(calc(var(--dx, 0) * 0.3), -0.18em) scale(1.22) rotate(calc(var(--rot, 0deg) * 0.4));
-         filter: blur(0); }
-  72%  { transform: translate(0, 0.04em) scale(0.96) rotate(0deg); }
-  100% { opacity: 1;
-         transform: translate(0, 0) scale(1) rotate(0);
-         filter: blur(0); }
-}
-
-/* flip · Solari split-flap. Each char folds down from its top hinge
-   (rotateX) into place, staggered left→right by --i so the board "cascades".
-   A short over-rotation past 0° then settle reads as the mechanical clack of
-   a flap dropping. The hairline split line across each glyph + the leaf
-   cabinet styling live in the theme-flip bespoke block (they need the
-   monospace cell geometry tokens). Perspective is set on the card there too.
-   We suppress the floating .w wobble — a departure board doesn't drift. */
-body[data-reveal="flip"] .stage-card .w  { animation: none; }
-body[data-reveal="flip"] .stage-card .wi {
-  opacity: 0;
-  transform-origin: 50% 0;
-  transform: rotateX(-92deg);
-  animation: reveal-flip 540ms cubic-bezier(0.3, 0.9, 0.35, 1.25) forwards;
-  /* 60ms/char cascade across the board. The flap itself is quick (~0.5s) so a
-     long line still finishes its sweep in a readable beat. */
-  animation-delay: calc(var(--i) * 60ms);
-  backface-visibility: hidden;
-}
-@keyframes reveal-flip {
-  0%   { opacity: 0; transform: rotateX(-92deg); }
-  /* Snap visible as the leaf passes vertical, then a hair of overshoot past
-     flat (the spring on the cubic-bezier handles the settle back to 0). */
-  55%  { opacity: 1; transform: rotateX(8deg); }
-  100% { opacity: 1; transform: rotateX(0deg); }
-}
-
-/* none · no reveal (used by triplet/single layouts that don't render stage) */
+/* none · no reveal (used by single/conversation/danmaku layouts) */
 body[data-reveal="none"] .stage-card .w  { animation: none; }
 body[data-reveal="none"] .stage-card .wi { opacity: 1; }
 
@@ -496,23 +391,10 @@ body[data-reveal="none"] .stage-card .wi { opacity: 1; }
 /* ========================================================================= */
 body[data-layout="stage"]   #lyrics { display: none; }
 body[data-layout="stage"]   #stage  { display: block; }
-body[data-layout="triplet"] #lyrics { display: flex; }
-body[data-layout="triplet"] #stage  { display: none; }
 body[data-layout="single"]  #lyrics { display: flex; }
 body[data-layout="single"]  #stage  { display: none; }
 body[data-layout="single"]  #lyrics .line.prev,
 body[data-layout="single"]  #lyrics .line.next { display: none; }
-
-/* solo layout — instrumental visualizer. Hides everything except #solo,
-   which is a full-canvas spectrum + particle renderer with title overlay.
-   No cover image is shown (#bg/#tint hidden) — by design: instrumentals
-   shouldn't borrow lyric-track chrome. */
-body[data-layout="solo"] #lyrics,
-body[data-layout="solo"] #stage,
-body[data-layout="solo"] #cover-panel,
-body[data-layout="solo"] #bg,
-body[data-layout="solo"] #tint { display: none; }
-body[data-layout="solo"] #solo { display: block; }
 
 /* conversation layout — chat-style bubble stream. Used by imsg/duet themes
    (and any future "lyrics as dialogue" variant). Hides the standard lyric
@@ -532,36 +414,6 @@ body[data-layout="danmaku"] #bg,
 body[data-layout="danmaku"] #tint,
 body[data-layout="danmaku"] #fx { display: none; }
 body[data-layout="danmaku"] #danmaku { display: block; }
-
-/* triplet default look — prev/next muted, curr emphasized */
-body[data-layout="triplet"] .line {
-  /* filter is in the list now so the changing-state blur(1px) eases in/out
-     instead of snapping; transform rides a longer spring so the new current
-     line settles with a little life. */
-  transition:
-    opacity 300ms var(--ease-out),
-    transform 480ms var(--ease-spring),
-    filter 360ms var(--ease-out),
-    font-weight 360ms var(--ease-out);
-}
-body[data-layout="triplet"] .line.prev,
-body[data-layout="triplet"] .line.next {
-  font-size: calc(var(--fl-prev-size, 14.5px) * var(--fl-scale) * var(--fl-text-scale-bias, 1));
-  font-weight: 500;
-  color: var(--fl-prev-color, rgba(255, 255, 255, 0.42));
-  letter-spacing: 0.1px;
-}
-body[data-layout="triplet"] .line.curr {
-  font-size: calc(var(--fl-text-size, 28px) * var(--fl-scale) * var(--fl-text-scale-bias, 1));
-  font-weight: var(--fl-text-weight, 800);
-  opacity: 1;
-  letter-spacing: 0.2px;
-}
-body[data-layout="triplet"] .line.curr.changing {
-  opacity: 0.12;
-  transform: translateY(8px);
-  filter: blur(1px);
-}
 
 /* single default look — one giant line, centered */
 body[data-layout="single"] #lyrics {
@@ -587,39 +439,6 @@ body[data-layout="single"] .line.curr.changing {
   filter: blur(14px);
   transform: scale(0.96) translateY(6px);
   letter-spacing: 4px;
-}
-
-/* ========================================================================= */
-/*  §FRAMES — window-level layout                                            */
-/*  full (default):          lyrics fill the window                          */
-/*  cover-left:              left square = album cover 1:1, right = lyrics   */
-/*                           No theme in the registry uses this yet — it's   */
-/*                           wired up so you can set `frame: 'cover-left'`   */
-/*                           on a new theme and have it just work.           */
-/* ========================================================================= */
-#cover-panel {
-  display: none;
-  position: absolute;
-  top: 0; bottom: 0; left: 0;
-  aspect-ratio: 1 / 1;
-  z-index: 1;
-  overflow: hidden;
-}
-#cover-panel img {
-  width: 100%; height: 100%;
-  object-fit: cover;
-  display: block;
-}
-body[data-frame="cover-left"] #cover-panel { display: block; }
-body[data-frame="cover-left"] #lyrics,
-body[data-frame="cover-left"] #stage,
-body[data-frame="cover-left"] #bg,
-body[data-frame="cover-left"] #tint {
-  /* Cover is aspect-ratio 1:1, so its width == the window height. 100vh
-     lines up the remaining panels flush with the cover's right edge.
-     JS can override --fl-frame-cover-size if a theme wants a specific
-     pixel size or a different split ratio. */
-  left: var(--fl-frame-cover-size, 100vh);
 }
 
 /* ========================================================================= */
@@ -650,193 +469,6 @@ body.theme-typewriter .stage-card.leaving {
   transition:
     transform 620ms cubic-bezier(0.4, 0, 0.2, 1),
     opacity   420ms ease-out;
-}
-
-/* ----- aura · breathing pulse on the active line ----- */
-body.theme-aura .line.curr {
-  background-image: linear-gradient(180deg, rgba(255,255,255,1) 0%, rgba(255,240,225,0.92) 100%);
-  -webkit-background-clip: text;
-  background-clip: text;
-  -webkit-text-fill-color: transparent;
-  filter:
-    drop-shadow(0 0 18px rgba(255, 235, 210, 0.28))
-    drop-shadow(0 2px 12px rgba(0, 0, 0, 0.35));
-  animation: aura-curr-breathe 6s ease-in-out infinite;
-}
-@keyframes aura-curr-breathe {
-  0%, 100% { transform: scale(1);     }
-  50%      { transform: scale(1.012); }
-}
-@keyframes aura-breathe {
-  0%, 100% { transform: scale(1.60) translate(0,     0)     rotate(0deg);   }
-  25%      { transform: scale(1.66) translate(-14px, -10px) rotate(0.4deg); }
-  50%      { transform: scale(1.63) translate(12px,  -6px)  rotate(-0.3deg);}
-  75%      { transform: scale(1.68) translate(8px,   10px)  rotate(0.2deg); }
-}
-
-/* ----- minimal · Apple Music left-align + soft mask fade on prev/next ----- */
-body.theme-minimal #lyrics {
-  text-align: left;
-  padding: 0 30px 26px;
-  -webkit-mask-image: linear-gradient(180deg, transparent 0%, #000 18%, #000 82%, transparent 100%);
-          mask-image: linear-gradient(180deg, transparent 0%, #000 18%, #000 82%, transparent 100%);
-}
-body.theme-minimal .line      { text-shadow: 0 2px 14px rgba(0, 0, 0, 0.55); }
-body.theme-minimal .line.curr { font-size: calc(28px * var(--fl-scale)); font-weight: 800; color: #fff; letter-spacing: 0.2px; }
-
-/* ----- folio · luminous line focus with faint stage geometry ----- */
-body.theme-folio::before {
-  content: '';
-  position: absolute;
-  /* Inset scales with window so the frame stays a modest decorative rim at
-     fullscreen instead of a canvas-wide pill. Radius uses the window's own
-     --radius × 2 (a soft rounded rectangle) rather than 999px, which at
-     fullscreen would render as a weird elongated oval. */
-  inset: calc(18px * var(--fl-scale)) calc(22px * var(--fl-scale));
-  z-index: 2;
-  pointer-events: none;
-  border-radius: calc(var(--radius) * 2);
-  border: 0.5px solid rgba(255, 255, 255, 0.08);
-  box-shadow:
-    0 0 0 1px rgba(255,255,255,0.02) inset,
-    0 0 calc(56px * var(--fl-scale)) calc(-32px * var(--fl-scale)) var(--accent);
-  opacity: 0.7;
-}
-body.theme-folio #stage {
-  -webkit-mask-image: linear-gradient(90deg, transparent 0%, #000 10%, #000 90%, transparent 100%);
-          mask-image: linear-gradient(90deg, transparent 0%, #000 10%, #000 90%, transparent 100%);
-}
-body.theme-folio .stage-card {
-  top: 52%;
-  padding: 0 34px;
-}
-body.theme-folio .stage-card.leaving {
-  transform: translateY(calc(-50% - 54px)) scale(0.94);
-  opacity: 0;
-}
-
-/* ----- sleeve · album cover as a compact player surrogate ----- */
-body.theme-sleeve {
-  --radius: 16px;
-}
-body.theme-sleeve #cover-panel {
-  box-shadow:
-    1px 0 0 rgba(255, 255, 255, 0.08),
-    24px 0 52px -30px rgba(0, 0, 0, 0.85);
-}
-body.theme-sleeve #cover-panel img {
-  filter: saturate(1.05) contrast(1.03);
-}
-body.theme-sleeve #lyrics {
-  justify-content: center;
-  text-align: left;
-  padding: 34px 28px 22px 24px;
-  gap: 8px;
-}
-body.theme-sleeve .line {
-  text-wrap: balance;
-}
-body.theme-sleeve .line.curr {
-  max-width: 22ch;
-  color: #fffaf5;
-}
-body.theme-sleeve .line.curr.changing {
-  transform: translateY(5px);
-  filter: blur(2px);
-}
-body.theme-sleeve .line.prev,
-body.theme-sleeve .line.next {
-  max-width: 30ch;
-}
-body.theme-sleeve #meta {
-  /* Floor the max-width so ultra-wide or very-tall fullscreen windows (where
-     100vh exceeds the lyric panel's share of the width) don't collapse the
-     title pill to zero. 140px is enough to show "title · artist" truncated. */
-  max-width: max(140px, calc(100% - var(--fl-frame-cover-size, 100vh) - 116px));
-}
-
-/* ----- piano · Deemo-inspired rainy-piano ballad ----- */
-/* Rain animation: only the third tint-image layer moves. The first two
-   (vignette + sepia wash) stay anchored to 0,0 while the hatching slides
-   down-left, giving the impression of falling rain behind the lyric. */
-@keyframes rain-fall {
-  0%   { background-position: 0 0, 0 0, 0 0; }
-  100% { background-position: 0 0, 0 0, -72px 240px; }
-}
-
-/* Piano-key strip — 24 white keys spanning the bottom, with black keys
-   overlaid at standard positions (after white indices 0,1,3,4,5 mod 7).
-   Fades into the scene via a soft top mask so it reads as atmospheric,
-   not chrome. */
-#piano-keys {
-  display: none;
-  position: absolute;
-  left: 0; right: 0; bottom: 0;
-  height: calc(72px * var(--fl-scale, 1));
-  z-index: 3;
-  pointer-events: none;
-  overflow: hidden;
-  -webkit-mask-image: linear-gradient(180deg, transparent 0%, #000 42%, #000 100%);
-          mask-image: linear-gradient(180deg, transparent 0%, #000 42%, #000 100%);
-}
-body.theme-piano #piano-keys { display: block; }
-
-/* Lift lyric text so the current line doesn't collide with the key strip. */
-body.theme-piano #lyrics {
-  padding-bottom: calc(60px * var(--fl-scale, 1));
-}
-body.theme-piano .line.curr {
-  font-style: italic;
-  text-wrap: balance;
-  max-width: 26ch;
-}
-/* Dim change animation: let serifs ease rather than snap — piano ballads
-   breathe, they don't swap. */
-body.theme-piano .line.curr.changing {
-  opacity: 0;
-  filter: blur(10px);
-  letter-spacing: 8px;
-  transform: translateY(4px);
-}
-
-#piano-keys .pk {
-  position: absolute;
-  /* --i is written by JS (buildPianoKeys). 24 white keys evenly distributed. */
-}
-/* Keys are driven by a per-element --lit CSS variable in [0,1], written
-   every frame by applySpectrumToPiano(). No CSS transitions here — JS
-   already does the envelope smoothing; adding a CSS transition would
-   lag the audio visibly. */
-#piano-keys .pk.w {
-  bottom: 0;
-  width: calc(100% / 24);
-  height: 100%;
-  left: calc((100% / 24) * var(--i));
-  background: linear-gradient(180deg,
-    rgba(255, 240, 210, calc(0.05 + var(--lit, 0) * 0.45)),
-    rgba(255, 220, 170, calc(0.015 + var(--lit, 0) * 0.12)));
-  border-right: 0.5px solid rgba(0,0,0,0.45);
-  border-top: 0.5px solid rgba(245,238,225,0.10);
-  box-shadow: 0
-    calc(-22px * var(--lit, 0))
-    calc(36px * var(--lit, 0))
-    rgba(255, 225, 170, calc(0.32 * var(--lit, 0)));
-}
-#piano-keys .pk.b {
-  top: 0;
-  /* Black key centered on border between white i and i+1: left edge at
-     (i + 1 - half_ratio) · (100%/24). half_ratio = 0.31. */
-  width: calc((100% / 24) * 0.62);
-  height: 62%;
-  left: calc((100% / 24) * (var(--i) + 0.69));
-  background: linear-gradient(180deg,
-    rgba(18, 14, 10, calc(0.9 - var(--lit, 0) * 0.35)),
-    rgba(30, 22, 15, calc(0.7 - var(--lit, 0) * 0.25)));
-  border-radius: 0 0 3px 3px;
-  border: 0.5px solid rgba(0,0,0,0.75);
-  box-shadow:
-    0 calc(-12px * var(--lit, 0)) calc(22px * var(--lit, 0)) rgba(255, 210, 140, calc(0.5 * var(--lit, 0))),
-    0 2px 4px rgba(0,0,0,0.28) inset;
 }
 
 /* ----- danmaku · fullscreen barrage / 弹幕 ----- */
@@ -877,102 +509,6 @@ body.theme-danmaku {
 @keyframes dm-fly {
   from { transform: translate3d(100vw,  0, 0); }
   to   { transform: translate3d(-100%,  0, 0); }
-}
-
-/* ----- solo · instrumental visualizer ----- */
-/* Container fills the window; canvas is absolutely positioned behind the
-   meta block so it covers all of it. Meta is centered, layered on top. */
-#solo {
-  display: none;
-  position: absolute; inset: 0;
-  z-index: 3;
-  background: var(--fl-bg-color, #08060e);
-  overflow: hidden;
-}
-#solo #solo-fx {
-  position: absolute; inset: 0;
-  width: 100%; height: 100%;
-  display: block;
-}
-#solo .solo-meta {
-  position: absolute;
-  inset: 0;
-  display: flex; flex-direction: column;
-  align-items: center; justify-content: center;
-  text-align: center;
-  pointer-events: none;
-  padding: 0 30px;
-  text-shadow: 0 2px 14px rgba(0,0,0,0.7), 0 0 24px var(--accent-glow);
-}
-#solo .solo-title {
-  font-family: var(--fl-text-font, inherit);
-  font-size: calc(20px * var(--fl-scale, 1) * var(--fl-text-scale-bias, 1));
-  font-weight: 700;
-  letter-spacing: 0.4px;
-  color: #fffaf2;
-  max-width: 80%;
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-}
-#solo .solo-artist {
-  margin-top: 6px;
-  font-size: calc(12px * var(--fl-scale, 1));
-  font-weight: 500;
-  letter-spacing: 0.6px;
-  color: rgba(255,255,255,0.62);
-  max-width: 70%;
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-}
-
-/* ----- sakura · falling petals ----- */
-/* Pool of N petals with randomized per-element vars (--x, --dur, --sway,
-   --delay, --size, --rot). Each petal: .petal > ::before is the actual
-   petal shape, while the wrapper handles vertical fall and the inner
-   handles horizontal sway — composing two animations cleanly. */
-#sakura {
-  display: none;
-  position: absolute; inset: 0;
-  z-index: 2;
-  pointer-events: none;
-  overflow: hidden;
-}
-body.theme-sakura #sakura { display: block; }
-.petal {
-  position: absolute;
-  top: -20px;
-  left: var(--x, 50%);
-  width:  var(--size, 12px);
-  height: var(--size, 12px);
-  animation: sakura-fall var(--dur, 14s) linear infinite;
-  animation-delay: var(--delay, 0s);
-  will-change: transform;
-}
-.petal::before {
-  content: '';
-  display: block;
-  width: 100%; height: 100%;
-  /* Petal shape: asymmetric oval, tinted to the accent so the field shifts
-     color with the song. No box-shadow — 32 shadowed elements with infinite
-     animations is a noticeable CPU cost on every frame. */
-  background: radial-gradient(ellipse at 30% 30%,
-              rgba(255, 255, 255, 0.95) 0%,
-              var(--accent, #ffb6c1) 60%,
-              rgba(180, 80, 100, 0.9) 100%);
-  border-radius: 100% 0 100% 0;
-  transform: rotate(var(--rot, 0deg));
-  animation: sakura-sway var(--sway, 4s) ease-in-out infinite;
-  animation-delay: var(--delay, 0s);
-  opacity: 0.92;
-}
-@keyframes sakura-fall {
-  /* Vertical journey from above the canvas to below, with a slow rotation
-     so the petal "tumbles" as it falls. */
-  from { transform: translateY(-10vh) rotate(0deg); }
-  to   { transform: translateY(120vh) rotate(540deg); }
-}
-@keyframes sakura-sway {
-  /* Horizontal wobble so falls aren't dead-straight. */
-  0%, 100% { margin-left: -16px; }
-  50%      { margin-left:  16px; }
 }
 
 /* ----- conversation · shared bubble stream (imsg) ----- */
@@ -1137,296 +673,4 @@ body.theme-subtitle .line.curr.changing {
 }
 body.theme-subtitle #topbar {
   top: calc(8px * min(var(--fl-scale), 1.8));
-}
-
-/* ========================================================================= */
-/*  §KINETIC — ボカロ MV style kinetic typography                             */
-/*  Each .stage-card is positioned randomly via --kx/--ky/--kscale/--krot,   */
-/*  stamped by JS. Cards enter via one of several named animations chosen    */
-/*  per-card (data-kenter). Leaving cards shrink + blur away.                */
-/* ========================================================================= */
-
-body.theme-kinetic .stage-card {
-  top: var(--ky, 50%);
-  left: var(--kx, 50%);
-  right: auto;
-  padding: 0;
-  transform:
-    translate(-50%, -50%)
-    scale(var(--kscale, 1))
-    rotate(var(--krot, 0deg));
-  transform-origin: center center;
-  text-align: var(--kalign, center);
-  white-space: nowrap;
-  transition: none;
-  will-change: transform, opacity;
-}
-
-/* suppress the normal reveal per-char animations — kinetic uses whole-card entrance */
-body.theme-kinetic .stage-card .w  { animation: none; }
-body.theme-kinetic .stage-card .wi { opacity: 1; animation: none; }
-
-/* entrance variants */
-body.theme-kinetic .stage-card[data-kenter="slide-left"] {
-  animation: k-slide-left 600ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
-}
-body.theme-kinetic .stage-card[data-kenter="slide-right"] {
-  animation: k-slide-right 600ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
-}
-body.theme-kinetic .stage-card[data-kenter="slide-up"] {
-  animation: k-slide-up 550ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
-}
-body.theme-kinetic .stage-card[data-kenter="zoom-in"] {
-  animation: k-zoom-in 500ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
-}
-body.theme-kinetic .stage-card[data-kenter="zoom-out"] {
-  animation: k-zoom-out 500ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
-}
-body.theme-kinetic .stage-card[data-kenter="drop"] {
-  animation: k-drop 550ms cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
-}
-
-@keyframes k-slide-left {
-  0%   { opacity: 0; transform: translate(calc(-50% + 120px), -50%) scale(var(--kscale, 1)) rotate(var(--krot, 0deg)); }
-  100% { opacity: 1; transform: translate(-50%, -50%) scale(var(--kscale, 1)) rotate(var(--krot, 0deg)); }
-}
-@keyframes k-slide-right {
-  0%   { opacity: 0; transform: translate(calc(-50% - 120px), -50%) scale(var(--kscale, 1)) rotate(var(--krot, 0deg)); }
-  100% { opacity: 1; transform: translate(-50%, -50%) scale(var(--kscale, 1)) rotate(var(--krot, 0deg)); }
-}
-@keyframes k-slide-up {
-  0%   { opacity: 0; transform: translate(-50%, calc(-50% + 80px)) scale(var(--kscale, 1)) rotate(var(--krot, 0deg)); }
-  100% { opacity: 1; transform: translate(-50%, -50%) scale(var(--kscale, 1)) rotate(var(--krot, 0deg)); }
-}
-@keyframes k-zoom-in {
-  0%   { opacity: 0; transform: translate(-50%, -50%) scale(calc(var(--kscale, 1) * 0.3)) rotate(var(--krot, 0deg)); }
-  100% { opacity: 1; transform: translate(-50%, -50%) scale(var(--kscale, 1)) rotate(var(--krot, 0deg)); }
-}
-@keyframes k-zoom-out {
-  0%   { opacity: 0; transform: translate(-50%, -50%) scale(calc(var(--kscale, 1) * 2.2)) rotate(var(--krot, 0deg)); filter: blur(8px); }
-  100% { opacity: 1; transform: translate(-50%, -50%) scale(var(--kscale, 1)) rotate(var(--krot, 0deg)); filter: blur(0); }
-}
-@keyframes k-drop {
-  0%   { opacity: 0; transform: translate(-50%, calc(-50% - 100px)) scale(var(--kscale, 1)) rotate(calc(var(--krot, 0deg) + 8deg)); }
-  100% { opacity: 1; transform: translate(-50%, -50%) scale(var(--kscale, 1)) rotate(var(--krot, 0deg)); }
-}
-
-/* leaving: quick shrink + blur out in place */
-body.theme-kinetic .stage-card.leaving {
-  transform: translate(-50%, -50%) scale(calc(var(--kscale, 1) * 0.6)) rotate(var(--krot, 0deg));
-  opacity: 0;
-  filter: blur(14px);
-  transition:
-    transform 800ms cubic-bezier(0.4, 0, 0.2, 1),
-    opacity   600ms ease-out,
-    filter    800ms ease-out;
-  animation: none !important;
-}
-
-/* ========================================================================= */
-/*  §V2 BESPOKE — flip (Solari) · semantic (kinetic typography)              */
-/*  rain's visuals are entirely shader-side (fx.js); no CSS block needed.    */
-/* ========================================================================= */
-
-/* ----- flip · Solari split-flap departure board / 翻牌 ----- */
-/* The reveal-flip keyframe (in §REVEALS) does the rotateX fold; this block
-   makes each .wi look like a physical flap leaf (dark face, vertical gradient,
-   hairline split across the middle) and gives the card the perspective the
-   rotateX needs to read as 3D. Monospace + uppercase tokens (themes.js) give
-   the uniform-cell departure-board grid. */
-body.theme-flip .stage-card {
-  /* Perspective so each leaf's rotateX has depth instead of a flat squash.
-     transform-style preserved so the per-char ::after split line rotates with
-     the leaf. */
-  perspective: 700px;
-  transform-style: preserve-3d;
-  /* A touch of letter-spacing already in tokens; keep the line on one row so
-     the board reads as a single split-flap strip. Long lines still wrap — the
-     flaps just continue on the next row. */
-  line-height: 1.18;
-}
-body.theme-flip .stage-card .w {
-  /* Tight inter-flap gap so neighbouring leaves look like one mechanical row. */
-  margin: 0 0.5px;
-}
-body.theme-flip .stage-card .wi {
-  position: relative;
-  /* Fixed-ish cell so spaces and glyphs share the departure-board grid. min
-     width keeps narrow glyphs (I, l, 1) from collapsing the leaf. */
-  min-width: 0.62em;
-  padding: 0.08em 0.06em 0.1em;
-  text-align: center;
-  border-radius: 3px;
-  /* Flap face: two-tone vertical gradient, darker at the hinge, so the split
-     line below reads as the seam between an upper + lower leaf. */
-  background:
-    linear-gradient(180deg,
-      rgba(36, 38, 44, 0.96) 0%,
-      rgba(26, 28, 33, 0.96) 49.6%,
-      rgba(14, 15, 19, 0.98) 50.4%,
-      rgba(22, 24, 29, 0.96) 100%);
-  box-shadow:
-    0 1px 2px rgba(0, 0, 0, 0.55),
-    0 0 0 0.5px rgba(0, 0, 0, 0.7),
-    inset 0 0.5px 0 rgba(255, 255, 255, 0.06);
-}
-/* The split line: a hard hairline across the vertical centre of every leaf,
-   the defining feature of a split-flap glyph. */
-body.theme-flip .stage-card .wi::after {
-  content: '';
-  position: absolute;
-  left: 0; right: 0; top: 50%;
-  height: 1px;
-  transform: translateY(-0.5px);
-  background: rgba(0, 0, 0, 0.85);
-  box-shadow: 0 0.5px 0 rgba(255, 255, 255, 0.05);
-  pointer-events: none;
-}
-/* Leaving: the board clears by flapping the old line away (fold up from the
-   bottom hinge) rather than the default drift-up-and-blur. Suppresses the
-   stage default leave transform so the flaps fold in place. */
-body.theme-flip .stage-card.leaving {
-  transform: translateY(-50%);
-  opacity: 0;
-  filter: none;
-  transition: opacity 360ms ease-out 140ms;
-}
-body.theme-flip .stage-card.leaving .wi {
-  transform-origin: 50% 100%;
-  animation: flip-clear 280ms cubic-bezier(0.4, 0, 0.7, 0.5) forwards;
-  animation-delay: calc(var(--i) * 26ms);
-}
-@keyframes flip-clear {
-  0%   { transform: rotateX(0deg);   opacity: 1; }
-  100% { transform: rotateX(88deg);  opacity: 0; }
-}
-
-/* ----- semantic · kinetic typography / 动态字 ----- */
-/* Word-level rendering (app.js renderStage semantic branch): each .wi is a
-   whole word tagged with data-motion. Concerns are split across the two
-   nested spans so an entrance and a perpetual motion can both use transform
-   without fighting:
-     .w  → staggered fade/rise ENTRANCE (opacity + translateY), by --i.
-     .wi → perpetual MOTION keyed off data-motion (fall/rise/stretch/...).
-   Words with no motion just enter and hold still. */
-body.theme-semantic .stage-card {
-  /* Slightly looser line-height so vertical drift motions (fall/rise/fly)
-     have room without colliding with neighbouring wrapped rows. */
-  line-height: 1.34;
-}
-body.theme-semantic .stage-card .w {
-  /* Override the default w-float wobble — entrance is owned here instead. */
-  opacity: 0;
-  transform: translateY(0.5em);
-  animation: sem-enter 620ms cubic-bezier(0.2, 0.9, 0.25, 1) forwards;
-  animation-delay: calc(var(--i) * 70ms);
-}
-@keyframes sem-enter {
-  0%   { opacity: 0; transform: translateY(0.5em); }
-  100% { opacity: 1; transform: translateY(0); }
-}
-body.theme-semantic .stage-card .wi {
-  display: inline-block;
-  /* Default resting weight; stress raises it (below). */
-  transition: font-weight 300ms var(--ease-out);
-}
-
-/* fall · gentle, continuous downward sink-and-recover. Small amplitude so the
-   word reads as "weighed down" rather than literally leaving the line. */
-body.theme-semantic .wi[data-motion="fall"] {
-  animation: sem-fall 3.2s ease-in-out infinite;
-  animation-delay: calc(var(--seed, 0) * -2s);
-}
-@keyframes sem-fall {
-  0%, 100% { transform: translateY(0);      opacity: 1;    }
-  60%      { transform: translateY(0.22em); opacity: 0.82; }
-}
-
-/* rise · the mirror of fall — a slow lift. */
-body.theme-semantic .wi[data-motion="rise"] {
-  animation: sem-rise 3.4s ease-in-out infinite;
-  animation-delay: calc(var(--seed, 0) * -2s);
-}
-@keyframes sem-rise {
-  0%, 100% { transform: translateY(0);       }
-  55%      { transform: translateY(-0.2em);  }
-}
-
-/* stretch · forever/endless — letter-spacing breathes wide and back. Uses the
-   word's own tracking; large but slow so it reads as "drawn out". */
-body.theme-semantic .wi[data-motion="stretch"] {
-  animation: sem-stretch 4.6s ease-in-out infinite;
-}
-@keyframes sem-stretch {
-  0%, 100% { letter-spacing: 0.02em; }
-  50%      { letter-spacing: 0.42em; }
-}
-
-/* shake · break/shatter — a tight nervous jitter. Tiny offsets, fast, so it
-   reads as a word about to come apart without being seizure-y. */
-body.theme-semantic .wi[data-motion="shake"] {
-  animation: sem-shake 0.42s steps(2, end) infinite;
-}
-@keyframes sem-shake {
-  0%   { transform: translate(0, 0)        rotate(0deg);    }
-  25%  { transform: translate(-0.04em, 0.02em) rotate(-1.4deg); }
-  50%  { transform: translate(0.05em, -0.03em) rotate(1.1deg);  }
-  75%  { transform: translate(-0.03em, 0.01em) rotate(-0.8deg); }
-  100% { transform: translate(0, 0)        rotate(0deg);    }
-}
-
-/* pulse · heart/beat/love — a soft double-thump scale, like a heartbeat. */
-body.theme-semantic .wi[data-motion="pulse"] {
-  transform-origin: center center;
-  animation: sem-pulse 1.5s ease-in-out infinite;
-}
-@keyframes sem-pulse {
-  0%, 55%, 100% { transform: scale(1);    }
-  14%           { transform: scale(1.14); }
-  28%           { transform: scale(1.04); }
-  40%           { transform: scale(1.1);  }
-}
-
-/* fly · float/dream/drift — a slow lazy figure-of-eight drift. */
-body.theme-semantic .wi[data-motion="fly"] {
-  animation: sem-fly 5.2s ease-in-out infinite;
-  animation-delay: calc(var(--seed, 0) * -3s);
-}
-@keyframes sem-fly {
-  0%, 100% { transform: translate(0, 0)          rotate(0deg);    }
-  25%      { transform: translate(0.12em, -0.14em) rotate(1.2deg);  }
-  50%      { transform: translate(0.02em, -0.22em) rotate(-0.8deg); }
-  75%      { transform: translate(-0.1em, -0.12em) rotate(0.6deg);  }
-}
-
-/* fade · gone/forget/vanish — the word breathes toward transparency, never
-   fully gone (it's still a lyric you need to read). */
-body.theme-semantic .wi[data-motion="fade"] {
-  animation: sem-fade 3.8s ease-in-out infinite;
-  animation-delay: calc(var(--seed, 0) * -2s);
-}
-@keyframes sem-fade {
-  0%, 100% { opacity: 1;    filter: blur(0);     }
-  55%      { opacity: 0.32; filter: blur(1.4px); }
-}
-
-/* stress · content-word emphasis. No perpetual motion — just a heavier resting
-   weight + a one-shot bump as it enters, so the ear-landing words sit prouder
-   than the function words around them. */
-body.theme-semantic .wi[data-motion="stress"] {
-  font-weight: 900;
-  animation: sem-stress 600ms var(--ease-spring-soft) both;
-  animation-delay: calc(var(--i) * 70ms + 120ms);
-}
-@keyframes sem-stress {
-  0%   { transform: scale(1);    }
-  45%  { transform: scale(1.16); }
-  100% { transform: scale(1);    }
-}
-
-/* Honour reduced-motion: drop the perpetual loops (entrance still plays). */
-@media (prefers-reduced-motion: reduce) {
-  body.theme-semantic .wi[data-motion] { animation: none !important; }
-  body.theme-semantic .wi[data-motion="stretch"] { letter-spacing: 0.1em; }
-  body.theme-semantic .wi[data-motion="stress"]  { font-weight: 900; }
 }

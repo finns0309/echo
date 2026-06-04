@@ -243,13 +243,9 @@ function commitTrack(np, lines, cover, elapsed, rate) {
   titleEl.textContent = np.title;
   artistEl.textContent = np.artist ? ' · ' + np.artist : '';
   if (cover) {
-    // Cover flows through a CSS var so themes that want a fully custom
-    // background (gradients, CRT, etc) can override --fl-bg-image without
-    // fighting an inline style. Also feed the cover-panel img for the
-    // reserved 'cover-left' frame layout.
+    // Cover flows through a CSS var so themes can override --fl-bg-image
+    // without fighting an inline style.
     document.body.style.setProperty('--fl-cover-url', `url("${cover}")`);
-    const coverImg = document.getElementById('cover');
-    if (coverImg) coverImg.src = cover;
     applyAccentFromCover(cover);
   }
 
