@@ -1,0 +1,496 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>echo · 刊物 风格样张</title>
+<!--
+  刊物 — 把正在播放的歌排成一页杂志。
+
+  这是风格样张,不是成品主题:同一首《月光 / Clair de Lune》,
+  用三种刊物语言各排一版。← / → 或 1 / 2 / 3 切换。
+
+  ① 场刊 PROGRAMME   音乐会节目单:轴心对称、Didot、双髮丝线、花饰
+  ② 文藝 BUNGEI      民国/昭和文艺月刊:竖排、界行、鱼尾、朱印
+  ③ 特辑 EDITORIAL   现代编辑设计:大字标题压图版、不对称网格、抽言
+
+  歌词的"剧情内位置"= 这页刊物的正文:标题(歌名)、署名(歌手)、
+  抽言(当前句)、图版(封面)、期号(曲目序)。引文用的是魏尔伦
+  《月光》原诗(1869,公有领域)——德彪西这曲子本来就是为它写的。
+-->
+<style>
+  :root {
+    --paper:   #f5f0e4;
+    --paper-2: #efe8d8;
+    --ink:     #211d16;
+    --ink-soft: rgba(33, 29, 22, 0.62);
+    --ink-faint: rgba(33, 29, 22, 0.34);
+    --hairline: rgba(33, 29, 22, 0.38);
+    --gold:    #8e7344;
+    --vermilion: #b13a2a;
+    --serif-l: "Didot", "Bodoni 72", "Baskerville", "Hoefler Text", Georgia, serif;
+    --serif-c: "Songti SC", "STSong", "Noto Serif CJK SC", serif;
+    --kai:     "Kaiti SC", "STKaiti", "Songti SC", serif;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 100%; height: 100%; overflow: hidden; }
+  body {
+    background: #14110b;
+    font-family: var(--serif-c);
+    color: var(--ink);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ── 纸 ─────────────────────────────────────────────── */
+  .spread {
+    position: fixed; inset: 0;
+    background:
+      radial-gradient(120% 90% at 50% 8%, rgba(255, 252, 242, 0.55), transparent 60%),
+      radial-gradient(140% 110% at 50% 50%, transparent 58%, rgba(96, 76, 44, 0.13) 100%),
+      var(--paper);
+    opacity: 0; visibility: hidden;
+    transition: opacity 700ms ease, visibility 0s 700ms;
+  }
+  .spread.active { opacity: 1; visibility: visible; transition: opacity 700ms ease; }
+  /* 入场:子元素错峰浮现 */
+  .spread .rise { opacity: 0; transform: translateY(14px); }
+  .spread.active .rise {
+    opacity: 1; transform: none;
+    transition: opacity 900ms ease, transform 1100ms cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .spread.active .rise.d1 { transition-delay: 120ms; }
+  .spread.active .rise.d2 { transition-delay: 260ms; }
+  .spread.active .rise.d3 { transition-delay: 420ms; }
+  .spread.active .rise.d4 { transition-delay: 600ms; }
+  .spread.active .rise.d5 { transition-delay: 780ms; }
+
+  #grain { position: fixed; inset: 0; z-index: 8; pointer-events: none; opacity: 0.055;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"); }
+
+  /* ── ① 场刊 PROGRAMME ───────────────────────────────── */
+  #v1 .page {
+    height: 100%;
+    display: flex; flex-direction: column; align-items: center;
+    text-align: center;
+    padding: clamp(28px, 5vh, 64px) 24px;
+  }
+  #v1 .rule-double {
+    width: min(560px, 72vw); height: 7px;
+    border-top: 1px solid var(--hairline);
+    border-bottom: 0.5px solid var(--hairline);
+  }
+  #v1 .masthead {
+    margin-top: 26px;
+    font-family: var(--serif-l);
+    font-size: 11px; letter-spacing: 0.52em; text-indent: 0.52em;
+    color: var(--ink-soft);
+  }
+  #v1 .issue {
+    margin-top: 10px;
+    font-size: 10.5px; letter-spacing: 0.34em; text-indent: 0.34em;
+    color: var(--ink-faint);
+  }
+  #v1 .orn { margin: 4.2vh 0 3.4vh; color: var(--gold); }
+  #v1 .movement {
+    font-size: 12px; letter-spacing: 0.42em; text-indent: 0.42em;
+    color: var(--gold);
+  }
+  #v1 .title-cjk {
+    margin-top: 2.6vh;
+    font-size: clamp(54px, 8.6vw, 104px);
+    font-weight: 600;
+    letter-spacing: 0.34em; text-indent: 0.34em;
+  }
+  #v1 .title-lat {
+    margin-top: 1.6vh;
+    font-family: var(--serif-l); font-style: italic; font-weight: 400;
+    font-size: clamp(20px, 2.6vw, 30px);
+    letter-spacing: 0.08em;
+    color: var(--ink-soft);
+  }
+  #v1 .byline {
+    margin-top: 3.2vh;
+    font-size: 13.5px; letter-spacing: 0.3em; text-indent: 0.3em;
+    color: var(--ink-soft);
+  }
+  #v1 .byline b { font-weight: 600; color: var(--ink); }
+  #v1 .quote {
+    margin-top: auto; padding-top: 3vh;
+    max-width: 34em;
+  }
+  #v1 .quote .fr {
+    font-family: var(--serif-l); font-style: italic;
+    font-size: clamp(16px, 1.9vw, 21px);
+    color: var(--ink-soft); letter-spacing: 0.02em;
+  }
+  #v1 .quote .zh {
+    margin-top: 12px;
+    font-family: var(--kai);
+    font-size: clamp(15px, 1.7vw, 19px);
+    letter-spacing: 0.22em; text-indent: 0.22em;
+    color: var(--ink);
+  }
+  #v1 .quote .src {
+    margin-top: 14px;
+    font-size: 10px; letter-spacing: 0.3em; text-indent: 0.3em;
+    color: var(--ink-faint);
+  }
+  #v1 .folio {
+    margin-top: auto;
+    display: flex; align-items: center; gap: 18px;
+    font-family: var(--serif-l); font-size: 12px; color: var(--ink-soft);
+  }
+  #v1 .folio::before, #v1 .folio::after {
+    content: ''; width: 64px; height: 0.5px; background: var(--hairline);
+  }
+
+  /* ── ② 文藝 BUNGEI ──────────────────────────────────── */
+  #v2 { background:
+      radial-gradient(130% 100% at 50% 0%, rgba(255, 251, 238, 0.5), transparent 55%),
+      radial-gradient(150% 120% at 50% 55%, transparent 55%, rgba(90, 66, 38, 0.16) 100%),
+      var(--paper-2); }
+  /* 书口双框 */
+  #v2 .frame {
+    position: absolute; inset: clamp(16px, 3vh, 34px);
+    border: 1.5px solid rgba(33, 29, 22, 0.66);
+    outline: 0.5px solid rgba(33, 29, 22, 0.4);
+    outline-offset: 4px;
+  }
+  /* 鱼尾(版心标记) */
+  #v2 .gyobi {
+    position: absolute; left: 50%; top: -1px; transform: translateX(-50%);
+    color: rgba(33, 29, 22, 0.78);
+  }
+  #v2 .page {
+    position: absolute; inset: clamp(16px, 3vh, 34px);
+    padding: clamp(26px, 5vh, 56px) clamp(28px, 4vw, 64px);
+    display: flex; flex-direction: row-reverse;       /* 竖排:从右读起 */
+    justify-content: space-between; align-items: stretch;
+  }
+  #v2 .col { writing-mode: vertical-rl; text-orientation: mixed; }
+  #v2 .head { display: flex; flex-direction: row-reverse; gap: clamp(18px, 2.4vw, 40px); }
+  #v2 .mag {
+    font-size: 13px; letter-spacing: 0.5em;
+    color: var(--ink-soft);
+    padding-top: 4px;
+  }
+  #v2 .title {
+    font-size: clamp(58px, 9vh, 110px);
+    font-weight: 600; letter-spacing: 0.36em;
+    margin-top: -6px;
+  }
+  #v2 .author {
+    font-family: var(--kai);
+    font-size: clamp(15px, 2vh, 19px); letter-spacing: 0.34em;
+    color: var(--ink-soft);
+    padding-top: clamp(20px, 6vh, 64px);
+  }
+  /* 正文栏:界行 */
+  #v2 .body {
+    align-self: center;
+    height: min(62vh, 560px);
+    display: flex; flex-direction: row-reverse; gap: 0;
+    padding: 0 1.4em;
+    background-image: repeating-linear-gradient(90deg,
+      rgba(33, 29, 22, 0.10) 0 0.5px, transparent 0.5px 3.05em);
+  }
+  #v2 .body p {
+    font-family: var(--kai);
+    font-size: clamp(17px, 2.4vh, 22px);
+    line-height: 1.0;
+    letter-spacing: 0.62em;
+    padding: 0 1.2em;
+    color: var(--ink);
+  }
+  #v2 .body p.dim { color: var(--ink-soft); }
+  /* 着重圈点 */
+  #v2 .body em { font-style: normal; -webkit-text-emphasis: dot rgba(177, 58, 42, 0.85); text-emphasis: dot rgba(177, 58, 42, 0.85); }
+  #v2 .foot {
+    align-self: flex-end;
+    display: flex; flex-direction: column; align-items: center; gap: 14px;
+    padding-bottom: 2px;
+  }
+  #v2 .seal {
+    width: 34px; height: 34px;
+    background: var(--vermilion);
+    border-radius: 3px;
+    transform: rotate(-1.6deg);
+    display: grid; place-items: center;
+    box-shadow: inset 0 0 5px rgba(120, 26, 16, 0.65), 0 1px 2px rgba(60, 30, 18, 0.25);
+  }
+  #v2 .seal i {
+    font-style: normal; font-family: var(--kai);
+    writing-mode: vertical-rl;
+    color: rgba(245, 240, 228, 0.94);
+    font-size: 12.5px; letter-spacing: 0.12em; line-height: 1.05;
+  }
+  #v2 .pageno {
+    writing-mode: vertical-rl;
+    font-size: 12px; letter-spacing: 0.3em; color: var(--ink-faint);
+  }
+
+  /* ── ③ 特辑 EDITORIAL ───────────────────────────────── */
+  #v3 { background:
+      radial-gradient(130% 90% at 28% 0%, rgba(255, 253, 246, 0.65), transparent 55%),
+      radial-gradient(150% 120% at 50% 60%, transparent 60%, rgba(80, 64, 40, 0.10) 100%),
+      #f8f4ea; }
+  #v3 .page {
+    height: 100%;
+    padding: clamp(22px, 4vh, 44px) clamp(26px, 4.4vw, 72px);
+    display: flex; flex-direction: column;
+  }
+  #v3 .folio-row {
+    display: flex; justify-content: space-between; align-items: baseline;
+    padding-bottom: 14px;
+    border-bottom: 1px solid var(--hairline);
+    font-family: var(--serif-l);
+    font-size: 10.5px; letter-spacing: 0.3em;
+    color: var(--ink-soft);
+  }
+  #v3 .folio-row b { font-weight: 600; color: var(--ink); letter-spacing: 0.34em; }
+  #v3 .main {
+    flex: 1; display: flex; align-items: center; gap: clamp(24px, 4vw, 72px);
+    min-height: 0;
+  }
+  #v3 .left { flex: 1.25; min-width: 0; }
+  #v3 .kicker {
+    font-size: 11px; letter-spacing: 0.46em;
+    color: var(--gold);
+  }
+  #v3 .big {
+    margin-top: 2.2vh;
+    font-family: var(--serif-l);
+    font-weight: 400;
+    font-size: clamp(64px, 9.6vw, 168px);
+    line-height: 0.94;
+    letter-spacing: 0.01em;
+    color: var(--ink);
+  }
+  #v3 .big i { font-style: italic; }
+  #v3 .sub {
+    margin-top: 2.4vh;
+    display: flex; align-items: baseline; gap: 18px;
+    font-size: clamp(15px, 1.8vw, 20px); letter-spacing: 0.3em;
+    color: var(--ink-soft);
+  }
+  #v3 .sub .ln { flex: 0 0 72px; height: 0.5px; background: var(--hairline); align-self: center; }
+  #v3 .pull {
+    margin-top: 5.2vh;
+    max-width: 30em;
+    position: relative;
+    padding-left: 54px;
+  }
+  #v3 .pull .mark {
+    position: absolute; left: 0; top: -22px;
+    font-family: var(--serif-l);
+    font-size: 92px; line-height: 1;
+    color: var(--gold); opacity: 0.55;
+  }
+  #v3 .pull .fr {
+    font-family: var(--serif-l); font-style: italic;
+    font-size: clamp(17px, 2vw, 23px); line-height: 1.5;
+    color: var(--ink);
+  }
+  #v3 .pull .zh {
+    margin-top: 10px;
+    font-family: var(--kai);
+    font-size: clamp(13.5px, 1.5vw, 17px); letter-spacing: 0.18em;
+    color: var(--ink-soft);
+  }
+  /* 图版:无外部素材,用层叠渐变作"月夜"双色版画 */
+  #v3 .right { flex: 1; max-width: min(38vh, 420px); }
+  #v3 .plate {
+    aspect-ratio: 1;
+    background:
+      radial-gradient(circle 16% at 68% 26%, #f3ead2 0 38%, rgba(243, 234, 210, 0.25) 55%, transparent 72%),
+      radial-gradient(120% 90% at 70% 20%, rgba(243, 234, 210, 0.16), transparent 50%),
+      linear-gradient(168deg, #2c3550 0%, #232a42 44%, #161b2e 78%, #10131f 100%);
+    border: 1px solid rgba(33, 29, 22, 0.5);
+    box-shadow: 0 1px 0 rgba(255, 255, 255, 0.6), inset 0 0 0 0.5px rgba(245, 240, 228, 0.12);
+    position: relative;
+    overflow: hidden;
+  }
+  /* 版画网线 */
+  #v3 .plate::after {
+    content: ''; position: absolute; inset: 0;
+    background: repeating-linear-gradient(0deg, rgba(245, 240, 228, 0.05) 0 1px, transparent 1px 3px);
+  }
+  /* 水面月痕 */
+  #v3 .plate::before {
+    content: ''; position: absolute; left: 58%; right: 14%; bottom: 8%; height: 34%;
+    background: repeating-linear-gradient(0deg,
+      rgba(243, 234, 210, 0.22) 0 1.5px, transparent 1.5px 7px);
+    filter: blur(0.3px);
+    transform: skewX(-8deg);
+  }
+  #v3 .caption {
+    margin-top: 12px;
+    display: flex; justify-content: space-between;
+    font-family: var(--serif-l);
+    font-size: 10px; letter-spacing: 0.26em;
+    color: var(--ink-faint);
+  }
+  #v3 .bottom {
+    display: flex; justify-content: space-between; align-items: baseline;
+    padding-top: 14px;
+    border-top: 0.5px solid var(--hairline);
+    font-family: var(--serif-l);
+    font-size: 10.5px; letter-spacing: 0.3em; color: var(--ink-soft);
+  }
+
+  /* ── 切换器 ─────────────────────────────────────────── */
+  #switcher {
+    position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%);
+    z-index: 10;
+    display: flex; gap: 8px;
+    padding: 8px 12px;
+    background: rgba(20, 17, 11, 0.78);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    border-radius: 99px;
+    border: 0.5px solid rgba(245, 240, 228, 0.16);
+    transition: opacity 300ms ease;
+  }
+  #switcher.hidden { opacity: 0; pointer-events: none; }
+  #switcher button {
+    font: 11px/1 var(--serif-c);
+    letter-spacing: 0.18em; text-indent: 0.18em;
+    color: rgba(245, 240, 228, 0.6);
+    background: transparent; border: none; border-radius: 99px;
+    padding: 7px 14px; cursor: pointer;
+    transition: color 200ms, background 200ms;
+  }
+  #switcher button:hover { color: #f5f0e4; }
+  #switcher button.on { background: rgba(245, 240, 228, 0.14); color: #f5f0e4; }
+  #hint {
+    position: fixed; right: 18px; bottom: 22px; z-index: 10;
+    font: 10px/1.6 var(--serif-c); letter-spacing: 0.1em;
+    color: rgba(245, 240, 228, 0.4);
+    mix-blend-mode: difference;
+  }
+</style>
+</head>
+<body>
+
+<!-- ① 场刊 -->
+<section class="spread active" id="v1">
+  <div class="page">
+    <div class="rule-double rise"></div>
+    <div class="masthead rise d1">ECHO &nbsp;CONCERT&nbsp; HALL</div>
+    <div class="issue rise d1">第 四 十 七 夜 · 独 奏</div>
+
+    <div class="orn rise d2">
+      <svg width="120" height="22" viewBox="0 0 120 22" fill="none">
+        <path d="M8 11 H46 M74 11 H112" stroke="currentColor" stroke-width="0.8"/>
+        <path d="M52 11 c 2.4 -5 7 -5 8 0 c 1 5 5.6 5 8 0" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/>
+        <circle cx="60" cy="11" r="1.6" fill="currentColor"/>
+      </svg>
+    </div>
+
+    <div class="movement rise d2">SUITE BERGAMASQUE · III</div>
+    <h1 class="title-cjk rise d3">月　光</h1>
+    <div class="title-lat rise d3">Clair de Lune</div>
+    <div class="byline rise d4"><b>德彪西</b>　曲 ／ 一九〇五年刊</div>
+
+    <div class="quote rise d5">
+      <div class="fr">Votre âme est un paysage choisi</div>
+      <div class="zh">你的灵魂，是一幅精选的风景</div>
+      <div class="src">魏尔伦《月光》——本曲所由来</div>
+    </div>
+
+    <div class="folio rise d5">12</div>
+  </div>
+</section>
+
+<!-- ② 文藝 -->
+<section class="spread" id="v2">
+  <div class="frame rise">
+    <svg class="gyobi" width="26" height="14" viewBox="0 0 26 14">
+      <path d="M0 0 H26 L13 9 Z" fill="currentColor"/>
+    </svg>
+  </div>
+  <div class="page">
+    <div class="col head rise d1">
+      <div class="mag">文 藝 月 刊 　 夜 之 部</div>
+      <h1 class="title">月光</h1>
+      <div class="author">德彪西 曲 · 魏尔伦 句</div>
+    </div>
+
+    <div class="body rise d3">
+      <p>你的灵魂是一幅<em>精选</em>的风景</p>
+      <p class="dim">假面与贝加莫舞曲游行其上</p>
+      <p class="dim">弹琴复歌舞　幻服彩衣裳</p>
+      <p>而其欢愉之下　悲哀隐隐发光</p>
+    </div>
+
+    <div class="col foot rise d4">
+      <div class="seal"><i>回声</i></div>
+      <div class="pageno">第卅七葉</div>
+    </div>
+  </div>
+</section>
+
+<!-- ③ 特辑 -->
+<section class="spread" id="v3">
+  <div class="page">
+    <div class="folio-row rise">
+      <b>ECHO</b>
+      <span>VOL. XII — THE NIGHT ISSUE</span>
+      <span>JUIN MMXXVI</span>
+    </div>
+
+    <div class="main">
+      <div class="left">
+        <div class="kicker rise d1">特辑 · 印象派一百二十年</div>
+        <h1 class="big rise d2">Clair<br><i>de Lune</i></h1>
+        <div class="sub rise d3"><span class="ln"></span><span>月光 — 德彪西</span></div>
+        <div class="pull rise d4">
+          <span class="mark">“</span>
+          <div class="fr">Votre âme est un paysage choisi…</div>
+          <div class="zh">你的灵魂，是一幅精选的风景</div>
+        </div>
+      </div>
+      <div class="right rise d3">
+        <div class="plate"></div>
+        <div class="caption"><span>FIG. 01</span><span>SUITE BERGAMASQUE, 1905</span></div>
+      </div>
+    </div>
+
+    <div class="bottom rise d5">
+      <span>PIANO · ANDANTE TRÈS EXPRESSIF</span>
+      <span>P. 03 — 04</span>
+    </div>
+  </div>
+</section>
+
+<div id="grain"></div>
+
+<nav id="switcher">
+  <button data-v="v1" class="on">① 场刊</button>
+  <button data-v="v2">② 文藝</button>
+  <button data-v="v3">③ 特辑</button>
+</nav>
+<div id="hint">← → 切换 · H 藏</div>
+
+<script>
+'use strict';
+const order = ['v1', 'v2', 'v3'];
+let cur = 0;
+function show(i) {
+  cur = (i + order.length) % order.length;
+  order.forEach((id, k) => document.getElementById(id).classList.toggle('active', k === cur));
+  document.querySelectorAll('#switcher button').forEach((b, k) => b.classList.toggle('on', k === cur));
+}
+document.querySelectorAll('#switcher button').forEach((b, k) =>
+  b.addEventListener('click', () => show(k)));
+addEventListener('keydown', (e) => {
+  if (e.key === 'ArrowRight') show(cur + 1);
+  if (e.key === 'ArrowLeft') show(cur - 1);
+  if (e.key === '1') show(0);
+  if (e.key === '2') show(1);
+  if (e.key === '3') show(2);
+  if (e.key === 'h' || e.key === 'H') document.getElementById('switcher').classList.toggle('hidden');
+});
+</script>
+</body>
+</html>

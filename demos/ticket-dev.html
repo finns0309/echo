@@ -1,0 +1,92 @@
+<!doctype html>
+<!-- ticket-dev.html — 联调页:加载真实的 renderer/style.css + renderer/ticket.js,
+     stub 掉 FL_AUDIO 模拟 rms/onset/centroid,按时间脚本驱动 setTrack/setLine/
+     clear,用来在浏览器里直接看主题本体(而非另画一份 demo)。
+     URL 参数: ?state=play|tear|clear|idle  (默认 play,tear 在 6s 后触发换曲) -->
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<title>ticket · dev harness</title>
+<link rel="stylesheet" href="../renderer/style.css">
+<style>
+  /* 模拟桌面壁纸,让透明窗口的卡片有个背景可读 */
+  html, body { height: 100%; }
+  body {
+    background:
+      radial-gradient(80% 60% at 30% 20%, #20262e, transparent 70%),
+      linear-gradient(160deg, #14181d, #0b0d10 70%) !important;
+  }
+  #devnote {
+    position: fixed; left: 14px; bottom: 12px; z-index: 99;
+    font: 11px/1.5 "PingFang SC", sans-serif; letter-spacing: 1px;
+    color: rgba(180, 200, 210, 0.35);
+  }
+</style>
+</head>
+<body class="theme-ticket" data-layout="ticket" style="--accent: rgb(120, 140, 255); --fl-scale: 1;">
+
+<div id="ticket"></div>
+<div id="devnote">ticket dev — 真实模块联调:onset 节拍模拟中</div>
+
+<script>
+// FL_AUDIO stub:伪节拍器。120BPM 的 onset(velocity 起伏)+ rms 呼吸 + centroid 漫游。
+(function () {
+  const handlers = [];
+  let t0 = performance.now();
+  window.FL_AUDIO = {
+    onOnset(cb) { handlers.push(cb); },
+    getFrame() {
+      const t = (performance.now() - t0) / 1000;
+      return {
+        rms: 0.10 + Math.max(0, Math.sin(t * 0.7)) * 0.13 + Math.sin(t * 2.3) * 0.02,
+        centroid: 0.5 + Math.sin(t * 0.21) * 0.3,
+        t: Date.now(),
+      };
+    },
+    frame() {},
+  };
+  // 模拟节拍:500ms 一拍,强弱交替,偶尔重音
+  setInterval(() => {
+    const strong = Math.random() < 0.3;
+    const v = strong ? 0.65 + Math.random() * 0.3 : 0.25 + Math.random() * 0.25;
+    const c = 0.5 + Math.sin(performance.now() / 4000) * 0.35;
+    handlers.forEach((cb) => cb(v, c));
+  }, 500);
+})();
+</script>
+<script src="../renderer/ticket.js"></script>
+<script>
+(function () {
+  const q = new URLSearchParams(location.search);
+  const state = q.get('state') || 'play';
+
+  FL_TICKET.build();
+  FL_TICKET.start();
+  (function loop() { FL_TICKET.frame(); requestAnimationFrame(loop); })();
+
+  FL_TICKET.setTrack({ title: '失眠都市', artist: 'unknown artist' });
+
+  const LINES = [
+    '整座城市替我失眠',
+    '而你在信号那头醒着',
+    '霓虹替星星值了夜班',
+    '耳机里下了一整夜的雨',
+  ];
+  let li = 0;
+  FL_TICKET.setLine({ text: LINES[0] });
+  const lineTimer = setInterval(() => {
+    li = (li + 1) % LINES.length;
+    FL_TICKET.setLine({ text: LINES[li] });
+  }, 3600);
+
+  if (state === 'tear') {
+    // 6s 后换曲:撕票 → 票根入堆 → 新票发牌
+    setTimeout(() => FL_TICKET.setTrack({ title: '晚风信号塔', artist: 'unknown artist' }), 6000);
+    setTimeout(() => FL_TICKET.setTrack({ title: '电流声里有你的名字', artist: 'unknown artist' }), 13000);
+  }
+  if (state === 'clear') setTimeout(() => { clearInterval(lineTimer); FL_TICKET.clear(); }, 4000);
+})();
+</script>
+
+</body>
+</html>

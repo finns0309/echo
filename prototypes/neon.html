@@ -1,0 +1,585 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>echo · 霓虹 原型</title>
+<!--
+  霓虹 — 雨夜小巷,每句歌词是一块现做的霓虹招牌。
+
+  视觉语法:
+    · 玻璃管字    暗管(灭)→ 镇流器迟疑点亮(逐字、带抽搐)→ 稳定燃烧;
+                  每句随机一个字"接触不良",一直在闪 —— 残缺即性格
+    · 湿地倒影    招牌在积水里倒立(模糊+拉伸+波纹摆动),雨点砸出涟漪
+    · 配电系统    onset→全牌电涌+管脚爆火花;换曲→全巷断电→新牌通电测试
+    · 営業中      巷口那块快坏的小竖牌,谁也不知道还亮着干嘛 —— 空闲态主角
+  映射:rms→雨密度/灯气息 · onset→电涌火花 · centroid→管色(青↔粉↔琥珀)
+-->
+<style>
+  :root {
+    color-scheme: dark;
+    --tube: rgb(255, 82, 160);
+    --tube-deep: rgb(168, 32, 96);
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 100%; height: 100%; overflow: hidden; }
+  body {
+    background: #07070c;
+    font: 13px/1.5 -apple-system, "PingFang SC", "Hiragino Sans", system-ui, sans-serif;
+    color: #fff;
+  }
+
+  /* ── 巷子:墙 + 街 ─────────────────────────────────────── */
+  #wall {
+    position: fixed; left: 0; right: 0; top: 0; height: 72%;
+    background:
+      radial-gradient(140% 90% at 50% -20%, #14151f 0%, #0b0c13 55%, #070709 100%);
+    overflow: hidden;
+  }
+  /* 砖缝 —— 极淡,只给墙一点"材质牙口" */
+  #wall::before { content: ''; position: absolute; inset: 0; opacity: 0.5;
+    background:
+      repeating-linear-gradient(0deg, rgba(255,255,255,0.016) 0 1px, transparent 1px 34px),
+      repeating-linear-gradient(90deg, rgba(255,255,255,0.010) 0 1px, transparent 1px 86px);
+  }
+  /* 墙面水渍流痕 */
+  #wall::after { content: ''; position: absolute; inset: 0;
+    background:
+      linear-gradient(180deg, transparent 60%, rgba(0,0,0,0.5) 100%),
+      repeating-linear-gradient(92deg, transparent 0 110px, rgba(255,255,255,0.014) 110px 113px, transparent 113px 240px);
+  }
+  #street {
+    position: fixed; left: 0; right: 0; bottom: 0; height: 28%;
+    background: linear-gradient(180deg, #0a0b12 0%, #05060a 100%);
+    overflow: hidden;
+  }
+  /* 沥青的湿光 */
+  #street::after { content: ''; position: absolute; inset: 0;
+    background:
+      repeating-linear-gradient(0deg, rgba(255,255,255,0.022) 0 1px, transparent 1px 7px),
+      linear-gradient(180deg, rgba(255,255,255,0.05), transparent 30%);
+    mix-blend-mode: overlay;
+  }
+
+  /* 远处别家招牌的色污(出画的光源) */
+  .glow { position: absolute; border-radius: 50%; filter: blur(70px); pointer-events: none; }
+  #glow-a { width: 44vw; height: 30vh; right: -12vw; top: 4vh; background: rgba(255, 60, 130, 0.13); }
+  #glow-b { width: 34vw; height: 26vh; left: -10vw; top: 26vh; background: rgba(40, 200, 255, 0.10); }
+  #glow-c { width: 26vw; height: 18vh; left: 24vw; top: -8vh; background: rgba(255, 170, 60, 0.07); }
+  .glow.mirror { filter: blur(90px); opacity: 0.5; }
+
+  /* 电线 */
+  #cables { position: absolute; left: 0; top: 0; width: 100%; height: 30%;
+    transform-origin: 50% 0; animation: cableSway 9s ease-in-out infinite alternate; }
+  @keyframes cableSway { from { transform: rotate(0.15deg); } to { transform: rotate(-0.15deg); } }
+  #cables path { stroke: rgba(0,0,0,0.85); stroke-width: 2.2; fill: none;
+    filter: drop-shadow(0 1px 0 rgba(255,255,255,0.05)); }
+
+  /* ── 主招牌 ───────────────────────────────────────────── */
+  #stage {
+    position: absolute; left: 50%; top: 40%;
+    transform: translate(-50%, -50%);
+  }
+  #plate {
+    position: relative;
+    padding: 34px 44px;
+    background: linear-gradient(160deg, rgba(16,18,26,0.82), rgba(9,10,16,0.86));
+    border: 1.5px solid rgba(70,78,96,0.55);
+    border-radius: 6px;
+    box-shadow:
+      0 30px 70px -20px rgba(0,0,0,0.85),
+      inset 0 1px 0 rgba(255,255,255,0.06),
+      inset 0 -14px 40px rgba(0,0,0,0.5);
+  }
+  /* 角上的固定螺栓 */
+  #plate i.bolt { position: absolute; width: 7px; height: 7px; border-radius: 50%;
+    background: radial-gradient(circle at 35% 30%, #9aa3b2, #3a4050 70%);
+    box-shadow: 0 1px 2px rgba(0,0,0,0.8); }
+  #plate i.b1 { left: 7px; top: 7px; } #plate i.b2 { right: 7px; top: 7px; }
+  #plate i.b3 { left: 7px; bottom: 7px; } #plate i.b4 { right: 7px; bottom: 7px; }
+  /* 吊杆 */
+  .rod { position: absolute; top: -26vh; width: 3px; height: calc(26vh + 6px);
+    background: linear-gradient(180deg, rgba(20,22,30,0.2), #1a1d26);
+    box-shadow: 1px 0 0 rgba(255,255,255,0.04); }
+  .rod.r1 { left: 18%; } .rod.r2 { right: 18%; }
+
+  #sign {
+    font-family: "Yuanti SC", "Hiragino Maru Gothic ProN", "PingFang SC", sans-serif;
+    font-size: clamp(40px, 5.2vw, 64px);
+    font-weight: 800;
+    letter-spacing: 14px;
+    white-space: nowrap;
+    line-height: 1.25;
+  }
+  #sign.vert {
+    writing-mode: vertical-rl;
+    letter-spacing: 18px;
+    font-size: clamp(44px, 5.8vw, 72px);
+  }
+  /* 灭:暗玻璃管 */
+  #sign .ch {
+    color: rgba(235, 240, 255, 0.045);
+    -webkit-text-stroke: 1.2px color-mix(in srgb, var(--tube) 16%, transparent);
+    transition: none;
+  }
+  /* 燃:白热芯 + 管色层晕 */
+  #sign .ch.on {
+    color: #fff;
+    -webkit-text-stroke: 0px transparent;
+    text-shadow:
+      0 0 3px rgba(255,255,255,0.9),
+      0 0 10px var(--tube),
+      0 0 24px var(--tube),
+      0 0 55px var(--tube-deep),
+      0 0 95px var(--tube-deep);
+  }
+  /* 点亮瞬间的镇流器抽搐 */
+  #sign .ch.ignite { animation: igniteFlick 420ms steps(1, end); }
+  @keyframes igniteFlick {
+    0% { opacity: 1; } 8% { opacity: 0.1; } 14% { opacity: 1; }
+    32% { opacity: 0.15; } 38% { opacity: 1; } 57% { opacity: 0.4; }
+    63% { opacity: 1; } 100% { opacity: 1; }
+  }
+  /* 接触不良的那个字 */
+  #sign .ch.faulty { animation: faultySputter 3.8s steps(1, end) infinite; }
+  @keyframes faultySputter {
+    0% { opacity: 1; } 11% { opacity: 1; } 12% { opacity: 0.12; } 13.5% { opacity: 1; }
+    34% { opacity: 1; } 35% { opacity: 0.2; } 35.8% { opacity: 0.9; } 36.6% { opacity: 0.15; }
+    38% { opacity: 1; } 71% { opacity: 1; } 72% { opacity: 0.3; } 74% { opacity: 1; }
+    100% { opacity: 1; }
+  }
+  /* onset 电涌 */
+  #stage.surge #plate { box-shadow: 0 30px 90px -16px rgba(0,0,0,0.85), inset 0 1px 0 rgba(255,255,255,0.06); }
+  #stage.surge #sign .ch.on { text-shadow:
+      0 0 4px rgba(255,255,255,1),
+      0 0 14px var(--tube),
+      0 0 34px var(--tube),
+      0 0 75px var(--tube-deep),
+      0 0 130px var(--tube-deep); }
+
+  /* ── 営業中(巷口残牌,空闲态的主角) ───────────────────── */
+  #eigyo {
+    position: absolute; left: 6%; top: 14%;
+    writing-mode: vertical-rl;
+    font-family: "Yuanti SC", "PingFang SC", sans-serif;
+    font-size: clamp(20px, 2vw, 28px); font-weight: 700; letter-spacing: 10px;
+    padding: 18px 10px;
+    color: rgba(235,240,255,0.05);
+    -webkit-text-stroke: 0.8px rgba(255, 156, 63, 0.18);
+    border: 1px solid rgba(60,56,48,0.6); border-radius: 4px;
+    background: rgba(10,10,14,0.6);
+    box-shadow: 0 16px 40px -12px rgba(0,0,0,0.8);
+  }
+  #eigyo.on {
+    color: #fff; -webkit-text-stroke: 0;
+    text-shadow: 0 0 3px rgba(255,255,255,0.85), 0 0 9px #ff9c3f, 0 0 22px #ff7a1a, 0 0 48px rgba(255,110,20,0.7);
+    animation: eigyoSputter 5.6s steps(1, end) infinite;
+  }
+  @keyframes eigyoSputter {
+    0% { opacity: 1; } 17% { opacity: 1; } 18% { opacity: 0.25; } 19% { opacity: 1; }
+    43% { opacity: 1; } 44% { opacity: 0.18; } 45.2% { opacity: 0.85; } 46% { opacity: 0.2; }
+    47.5% { opacity: 1; } 80% { opacity: 1; } 81% { opacity: 0.4; } 82.5% { opacity: 1; }
+    100% { opacity: 1; }
+  }
+
+  /* ── 倒影 ─────────────────────────────────────────────── */
+  #refl {
+    position: absolute; left: 50%; top: 0;
+    transform: translateX(-50%) scaleY(-1.35) translateY(-100%);
+    transform-origin: 50% 0;
+    filter: blur(5px) saturate(1.35) brightness(0.8);
+    opacity: 0.5;
+    -webkit-mask-image: linear-gradient(180deg, rgba(0,0,0,0.85), transparent 80%);
+    mask-image: linear-gradient(180deg, rgba(0,0,0,0.85), transparent 80%);
+    pointer-events: none;
+    animation: reflWobble 6.5s ease-in-out infinite alternate;
+  }
+  @keyframes reflWobble {
+    from { transform: translateX(-50%) scaleY(-1.33) translateY(-100%) skewX(0.5deg); }
+    to   { transform: translateX(-50%) scaleY(-1.4) translateY(-100%) skewX(-0.6deg); }
+  }
+  #refl-eigyo {
+    position: absolute; left: 6%; top: 0;
+    transform: scaleY(-1.3) translateY(-100%); transform-origin: 50% 0;
+    filter: blur(4px) brightness(0.75); opacity: 0.4;
+    -webkit-mask-image: linear-gradient(180deg, rgba(0,0,0,0.8), transparent 75%);
+    mask-image: linear-gradient(180deg, rgba(0,0,0,0.8), transparent 75%);
+    pointer-events: none;
+  }
+
+  /* 断电 */
+  body.blackout .glow { opacity: 0.12; transition: opacity 300ms ease; }
+  .glow { transition: opacity 800ms ease; }
+
+  #rain { position: fixed; inset: 0; z-index: 6; pointer-events: none; }
+  #grain { position: fixed; inset: 0; z-index: 7; pointer-events: none; opacity: 0.05;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"); }
+  #vignette { position: fixed; inset: 0; z-index: 5; pointer-events: none;
+    background: radial-gradient(130% 110% at 50% 40%, transparent 52%, rgba(0,0,0,0.55) 100%); }
+
+  /* ── 面板 ─────────────────────────────────────────────── */
+  #panel {
+    position: fixed; left: 18px; bottom: 18px; z-index: 10;
+    width: 280px; padding: 14px 16px 16px;
+    background: rgba(14,14,20,0.62); backdrop-filter: blur(20px) saturate(1.4);
+    -webkit-backdrop-filter: blur(20px) saturate(1.4);
+    border: 0.5px solid rgba(255,255,255,0.1); border-radius: 16px;
+    box-shadow: 0 18px 50px -20px rgba(0,0,0,0.7); user-select: none;
+    transition: opacity 240ms ease, transform 240ms ease;
+  }
+  #panel.hidden { opacity: 0; transform: translateY(8px); pointer-events: none; }
+  #panel h1 { font-size: 12px; font-weight: 600; letter-spacing: 0.3px; opacity: 0.9; margin-bottom: 2px; }
+  #panel .sub { font-size: 10.5px; opacity: 0.42; margin-bottom: 10px; line-height: 1.6; }
+  .row { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
+  .row label { width: 40px; font-size: 11px; opacity: 0.6; flex: none; }
+  .row input[type=range] { flex: 1; accent-color: #ff6aa9; height: 3px; }
+  .row .val { width: 34px; text-align: right; font-variant-numeric: tabular-nums; font-size: 10.5px; opacity: 0.55; }
+  .btns { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
+  button {
+    font: inherit; font-size: 11.5px; color: #fff; background: rgba(255,255,255,0.07);
+    border: 0.5px solid rgba(255,255,255,0.12); border-radius: 9px; padding: 6px 11px; cursor: pointer;
+    transition: background 140ms ease, transform 100ms ease;
+  }
+  button:hover { background: rgba(255,255,255,0.13); }
+  button:active { transform: scale(0.94); }
+  button.primary { background: rgba(255,106,169,0.24); border-color: rgba(255,106,169,0.45); }
+  .hint { margin-top: 12px; font-size: 10px; opacity: 0.34; line-height: 1.6; }
+  kbd { font: inherit; font-size: 9.5px; padding: 1px 4px; border-radius: 4px;
+    background: rgba(255,255,255,0.1); border: 0.5px solid rgba(255,255,255,0.14); }
+</style>
+</head>
+<body>
+
+<div id="wall">
+  <div class="glow" id="glow-a"></div>
+  <div class="glow" id="glow-b"></div>
+  <div class="glow" id="glow-c"></div>
+  <svg id="cables" viewBox="0 0 1000 220" preserveAspectRatio="none">
+    <path d="M -10 40 Q 250 86 500 64 T 1010 52" />
+    <path d="M -10 90 Q 300 150 620 118 T 1010 128" />
+  </svg>
+  <div id="eigyo">営業中</div>
+  <div id="stage">
+    <i class="rod r1"></i><i class="rod r2"></i>
+    <div id="plate">
+      <i class="bolt b1"></i><i class="bolt b2"></i><i class="bolt b3"></i><i class="bolt b4"></i>
+      <div id="sign"></div>
+    </div>
+  </div>
+</div>
+
+<div id="street">
+  <div class="glow mirror" style="width:44vw;height:22vh;right:-12vw;top:-6vh;background:rgba(255,60,130,0.10)"></div>
+  <div class="glow mirror" style="width:34vw;height:20vh;left:-10vw;top:2vh;background:rgba(40,200,255,0.08)"></div>
+  <div id="refl"></div>
+  <div id="refl-eigyo"></div>
+</div>
+
+<div id="vignette"></div>
+<canvas id="rain"></canvas>
+<div id="grain"></div>
+
+<div id="panel">
+  <h1>echo · 霓虹 原型</h1>
+  <div class="sub">每句歌词=一块现做的招牌 · 逐字通电 · 必有一字接触不良 · 倒影泡在积水里</div>
+  <div class="btns">
+    <button id="play" class="primary" style="flex:1">⏸ 暂停</button>
+    <button id="next">⏭ 换曲(断电)</button>
+    <button id="beat">♩</button>
+  </div>
+  <div class="row"><label>能量</label><input id="energy" type="range" min="0" max="100" value="55"><span class="val" id="energyV">55</span></div>
+  <div class="row"><label>雨</label><input id="rainAmt" type="range" min="0" max="100" value="60"><span class="val" id="rainV">60</span></div>
+  <div class="row"><label>管色</label><input id="warm" type="range" min="0" max="100" value="38"><span class="val" id="warmV">38</span></div>
+  <div class="hint">真品里:能量=muse rms,♩=onset(电涌+火花),管色=频谱质心,空闲=只剩営業中。<br><kbd>空格</kbd> 电涌 · <kbd>H</kbd> 隐藏面板</div>
+</div>
+
+<script>
+'use strict';
+const $ = id => document.getElementById(id);
+
+/* ───────────────────── 曲目(模拟) ───────────────────── */
+const TRACKS = [
+  { title: '霓虹雨', lines: [
+    ['雨把整条街调成慢速', 4.6],
+    ['招牌在水洼里学会倒立', 4.8],
+    ['你的名字 坏了一个字', 4.8],
+    ['闪烁的部分 是我没说的', 5.2],
+    ['', 6.5],
+    ['电流穿过玻璃管的喉咙', 4.8],
+    ['嗡鸣是这条巷子的方言', 4.8],
+    ['把心事挂成最亮的那块', 5.0],
+    ['雨停之前都不会熄灭', 5.4],
+  ]},
+  { title: '湿巷', lines: [
+    ['伞外是城市 伞内是我', 4.8],
+    ['积水把灯拉成长长的叹息', 5.0],
+    ['', 6.0],
+    ['深夜营业的 都是心事', 5.0],
+    ['打烊的时候 天就亮了', 5.4],
+  ]},
+  { title: '通宵', lines: [
+    ['二十四小时不打烊的光', 4.8],
+    ['替谁守着一句晚安', 4.8],
+    ['', 6.0],
+    ['你路过的时候 它最亮', 5.0],
+    ['你走远以后 它还亮', 5.4],
+  ]},
+];
+
+/* ───────────────────── 状态 ───────────────────── */
+const st = {
+  playing: true,
+  energy: 0.55, rain: 0.6, warm: 0.38,
+  track: 0, line: -1, lineT: 1.0,
+  nextBeat: 0, busy: false,
+};
+
+/* ───────────────────── 管色(centroid → 青↔粉↔琥珀) ───────────────────── */
+const PAL = [ [53,224,255], [255,82,160], [255,170,60] ];
+const lerp = (a,b,t) => a + (b-a)*t;
+function tubeColor(w) {
+  const t = w * 2;
+  const a = PAL[Math.min(1, Math.floor(t))], b = PAL[Math.min(2, Math.floor(t)+1)];
+  const f = t - Math.floor(t);
+  return [0,1,2].map(i => Math.round(lerp(a[i], b[i], f)));
+}
+function applyPalette() {
+  const c = tubeColor(st.warm);
+  document.documentElement.style.setProperty('--tube', `rgb(${c[0]},${c[1]},${c[2]})`);
+  document.documentElement.style.setProperty('--tube-deep', `rgb(${Math.round(c[0]*0.62)},${Math.round(c[1]*0.5)},${Math.round(c[2]*0.62)})`);
+}
+applyPalette();
+
+/* ───────────────────── 招牌点亮 ───────────────────── */
+const signEl = $('sign'), stageEl = $('stage'), eigyoEl = $('eigyo');
+let igniteTimers = [];
+
+function clearTimers() { igniteTimers.forEach(clearTimeout); igniteTimers = []; }
+
+function setSign(text, { slow = false } = {}) {
+  clearTimers();
+  signEl.classList.toggle('vert', text.length > 0 && text.length <= 6);
+  signEl.innerHTML = '';
+  if (!text) { syncRefl(); return; }
+  const chars = [...text];
+  const faultyIdx = chars.length >= 4 && Math.random() < 0.75
+    ? Math.floor(Math.random() * chars.length) : -1;
+  chars.forEach((c, i) => {
+    const s = document.createElement('span');
+    s.className = 'ch';
+    s.textContent = c === ' ' ? ' ' : c;
+    signEl.appendChild(s);
+    if (c === ' ') return;
+    const delay = 120 + i * (slow ? 300 : 130) + Math.random() * (slow ? 160 : 90);
+    igniteTimers.push(setTimeout(() => {
+      s.classList.add('on', 'ignite');
+      if (i === faultyIdx) {
+        s.classList.add('faulty');
+        s.style.animationDelay = (Math.random() * 2).toFixed(2) + 's';
+      }
+      igniteTimers.push(setTimeout(() => s.classList.remove('ignite'), 460));
+      syncRefl();
+    }, delay));
+  });
+  syncRefl();
+}
+function killSign() { clearTimers(); signEl.querySelectorAll('.ch').forEach(s => s.classList.remove('on','faulty','ignite')); syncRefl(); }
+
+/* 倒影 = 招牌的镜像克隆(定期同步,够用) */
+const reflEl = $('refl'), reflEigyo = $('refl-eigyo');
+function syncRefl() {
+  reflEl.innerHTML = '';
+  /* 故意保留子节点的重复 id:CSS 的 #sign/#plate 规则要靠它们命中克隆体;
+     JS 侧全部用启动时捕获的引用,getElementById 永远命中 #wall 里的原件 */
+  const clone = stageEl.cloneNode(true);
+  clone.removeAttribute('id');
+  clone.style.position = 'static';
+  clone.style.transform = 'none';
+  reflEl.appendChild(clone);
+  reflEigyo.innerHTML = '';
+  const ec = eigyoEl.cloneNode(true);
+  ec.removeAttribute('id');
+  ec.style.position = 'static';
+  reflEigyo.appendChild(ec);
+}
+setInterval(syncRefl, 400);
+
+/* ───────────────────── 歌词推进 ───────────────────── */
+function advance(dt) {
+  if (!st.playing || st.busy) return;
+  st.lineT -= dt;
+  if (st.lineT > 0) return;
+  const lines = TRACKS[st.track].lines;
+  st.line = (st.line + 1) % lines.length;
+  const [text, dur] = lines[st.line];
+  st.lineT = dur;
+  if (text === '') killSign();   /* 间奏:招牌熄灭,巷子只剩営業中和雨 */
+  else setSign(text);
+}
+
+/* ───────────────────── 换曲:断电仪式 ───────────────────── */
+function trackChange() {
+  if (st.busy) return;
+  st.busy = true;
+  const next = (st.track + 1) % TRACKS.length;
+  /* 1. 全巷断电 */
+  document.body.classList.add('blackout');
+  killSign();
+  eigyoEl.classList.remove('on');
+  setTimeout(() => {
+    /* 2. 新牌通电测试:歌名,慢速逐字 */
+    document.body.classList.remove('blackout');
+    setSign('《' + TRACKS[next].title + '》', { slow: true });
+    setTimeout(() => eigyoEl.classList.add('on'), 1800 + Math.random() * 800);
+    setTimeout(() => {
+      st.track = next; st.line = -1; st.lineT = 0.6; st.busy = false;
+    }, 3400);
+  }, 1300);
+}
+
+/* ───────────────────── 雨 + 涟漪 + 火花 ───────────────────── */
+const rcv = $('rain'), rctx = rcv.getContext('2d');
+let W = 0, H = 0;
+function fit() {
+  const dpr = Math.min(devicePixelRatio || 1, 2);
+  W = innerWidth; H = innerHeight;
+  rcv.width = W * dpr; rcv.height = H * dpr;
+  rctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+addEventListener('resize', fit); fit();
+
+const drops = [], rings = [], sparks = [];
+function spawnDrop() {
+  const grounded = Math.random();
+  drops.push({
+    x: Math.random() * (W * 1.1), y: -30 - Math.random() * H * 0.4,
+    len: 11 + Math.random() * 14,
+    spd: (980 + Math.random() * 520),
+    a: 0.16 + Math.random() * 0.26,
+    gy: H * 0.73 + grounded * H * 0.26,   /* 各自的落点(街面) */
+  });
+}
+function fireSparks() {
+  const chs = signEl.querySelectorAll('.ch.on');
+  if (!chs.length) return;
+  const el = chs[Math.floor(Math.random() * chs.length)];
+  const r = el.getBoundingClientRect();
+  const x = r.left + Math.random() * r.width, y = r.top + Math.random() * r.height;
+  const n = 7 + Math.floor(Math.random() * 7);
+  for (let i = 0; i < n; i++) {
+    const ang = -Math.PI/2 + (Math.random() - 0.5) * 2.4;
+    const v = 120 + Math.random() * 380;
+    sparks.push({ x, y, vx: Math.cos(ang)*v, vy: Math.sin(ang)*v, life: 0.45 + Math.random()*0.3, t: 0 });
+  }
+}
+
+/* ───────────────────── onset:电涌 ───────────────────── */
+let surgeTimer = 0;
+function fireOnset(v) {
+  stageEl.classList.add('surge');
+  clearTimeout(surgeTimer);
+  surgeTimer = setTimeout(() => stageEl.classList.remove('surge'), 150);
+  if (v > 0.7 && Math.random() < 0.55) fireSparks();
+  /* 远处的灯也跟着喘一下 */
+  glowPulse = Math.min(1, glowPulse + v * 0.5);
+}
+
+/* ───────────────────── 控件 ───────────────────── */
+$('play').addEventListener('click', () => {
+  st.playing = !st.playing;
+  $('play').textContent = st.playing ? '⏸ 暂停' : '▶ 播放';
+  if (!st.playing) { killSign(); }            /* 空闲:只剩営業中 */
+  else { st.line = -1; st.lineT = 0.8; }
+});
+$('next').addEventListener('click', () => { if (st.playing) trackChange(); });
+$('beat').addEventListener('click', () => fireOnset(0.95));
+$('energy').addEventListener('input', e => { st.energy = e.target.value/100; $('energyV').textContent = e.target.value; });
+$('rainAmt').addEventListener('input', e => { st.rain = e.target.value/100; $('rainV').textContent = e.target.value; });
+$('warm').addEventListener('input', e => { st.warm = e.target.value/100; $('warmV').textContent = e.target.value; applyPalette(); });
+addEventListener('keydown', e => {
+  if (e.code === 'Space') { e.preventDefault(); fireOnset(0.95); }
+  if (e.key === 'h' || e.key === 'H') $('panel').classList.toggle('hidden');
+});
+
+/* ───────────────────── 主循环 ───────────────────── */
+let glowPulse = 0;
+let lastT = performance.now();
+function tick(now) {
+  const dt = Math.min(0.05, (now - lastT) / 1000);
+  lastT = now;
+
+  advance(dt);
+
+  /* 节拍模拟 */
+  if (st.playing && now > st.nextBeat) {
+    fireOnset(0.4 + Math.random() * 0.6 * (0.4 + st.energy));
+    const bpm = 80 + st.energy * 76;
+    st.nextBeat = now + (60000 / bpm) * (0.75 + Math.random() * 0.5);
+  }
+
+  /* 远灯呼吸 */
+  glowPulse *= Math.exp(-dt * 4);
+  const breathe = 1 + Math.sin(now / 900) * 0.08 * (0.4 + st.energy) + glowPulse * 0.5;
+  $('glow-a').style.opacity = 0.8 * breathe;
+  $('glow-b').style.opacity = 0.75 * (2 - breathe) * 0.55;
+  $('glow-c').style.opacity = 0.7 * breathe * 0.8;
+
+  /* 雨 */
+  rctx.clearRect(0, 0, W, H);
+  const want = (st.rain * 1.6 + 0.1) * (0.6 + st.energy * 0.7) * 14;
+  for (let i = 0; i < want; i++) if (drops.length < 420) spawnDrop();
+  const tilt = -0.075 + Math.sin(now / 2400) * 0.025;
+  rctx.lineCap = 'round';
+  for (let i = drops.length - 1; i >= 0; i--) {
+    const d = drops[i];
+    const vy = d.spd * (0.85 + st.energy * 0.3);
+    d.y += vy * dt; d.x += vy * tilt * dt;
+    if (d.y > d.gy) {
+      if (Math.random() < 0.5) rings.push({ x: d.x, y: d.gy, r: 1, a: 0.3, t: 0 });
+      drops.splice(i, 1); continue;
+    }
+    rctx.strokeStyle = `rgba(168,194,235,${d.a})`;
+    rctx.lineWidth = 1;
+    rctx.beginPath();
+    rctx.moveTo(d.x, d.y);
+    rctx.lineTo(d.x - d.len * tilt * 3.2, d.y - d.len);
+    rctx.stroke();
+  }
+  /* 涟漪(压扁的椭圆,只在街面) */
+  for (let i = rings.length - 1; i >= 0; i--) {
+    const g = rings[i];
+    g.t += dt; g.r += dt * 46; g.a *= Math.exp(-dt * 3.4);
+    if (g.a < 0.015) { rings.splice(i, 1); continue; }
+    rctx.strokeStyle = `rgba(180,205,240,${g.a})`;
+    rctx.lineWidth = 0.8;
+    rctx.beginPath();
+    rctx.ellipse(g.x, g.y, g.r, g.r * 0.3, 0, 0, Math.PI * 2);
+    rctx.stroke();
+  }
+  /* 火花 */
+  rctx.globalCompositeOperation = 'lighter';
+  for (let i = sparks.length - 1; i >= 0; i--) {
+    const s = sparks[i];
+    s.t += dt;
+    if (s.t > s.life) { sparks.splice(i, 1); continue; }
+    s.vy += 1500 * dt;
+    s.x += s.vx * dt; s.y += s.vy * dt;
+    const f = 1 - s.t / s.life;
+    rctx.strokeStyle = `rgba(255,${190 + Math.floor(60*f)},${90 + Math.floor(100*f)},${(f * 0.9).toFixed(3)})`;
+    rctx.lineWidth = 1.2;
+    rctx.beginPath();
+    rctx.moveTo(s.x, s.y);
+    rctx.lineTo(s.x - s.vx * 0.016, s.y - s.vy * 0.016);
+    rctx.stroke();
+  }
+  rctx.globalCompositeOperation = 'source-over';
+
+  requestAnimationFrame(tick);
+}
+
+/* 开机:営業中先亮 */
+setTimeout(() => eigyoEl.classList.add('on'), 700);
+requestAnimationFrame(tick);
+</script>
+</body>
+</html>

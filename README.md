@@ -23,6 +23,20 @@ npm start
 
 启动后 `echo` 自动连上 `/now`，拿到准确的 `songId`、`currentTime` 和封面——不用猜歌、也不用猜进度。`muse` 没在跑时，`echo` 显示待播状态。
 
+### 选词导演（可选，需要 LLM key）
+
+主题里标红 / 放大的「强调词」默认由启发式挑选（`renderer/textpick.js`），CJK 分词常出错（日语只取到「合」而不是「合う」）。配置 LLM 导演后，每首**新**歌在换曲时把整份歌词批量交给 Claude 选词一次，结果按歌词哈希落盘缓存（`userData/director-cache/`），重听零成本；没有 key / 请求失败时静默回退启发式，永远不挡渲染。在仓库根目录建 `secrets.json`（已 gitignore，**不要提交**）：
+
+```json
+{
+  "bedrockApiKey": "ABSK…（Bedrock API key，bearer）",
+  "bedrockRegion": "us-east-1",
+  "bedrockModel": "global.anthropic.claude-sonnet-4-6"
+}
+```
+
+主进程经 Chromium 网络栈（`net.fetch`）调 Bedrock，跟随系统代理。详见 `director.js` 头注释。
+
 ## 使用
 
 - 拖动窗口主体即可移动；右上 `◌` 切鼠标穿透（变 `●` 后窗口不拦截点击，像贴纸贴在桌面上），`⤢` 铺满 / 还原，`×` 退出

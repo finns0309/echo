@@ -415,6 +415,80 @@ body[data-layout="danmaku"] #tint,
 body[data-layout="danmaku"] #fx { display: none; }
 body[data-layout="danmaku"] #danmaku { display: block; }
 
+/* roam layout — desktop-wide kinetic typography. Fully transparent canvas
+   like danmaku; every lyric line is a .rm-line staged somewhere on screen by
+   renderer/roam.js's director. */
+body[data-layout="roam"] #lyrics,
+body[data-layout="roam"] #stage,
+body[data-layout="roam"] #cover-panel,
+body[data-layout="roam"] #danmaku,
+body[data-layout="roam"] #convo,
+body[data-layout="roam"] #bg,
+body[data-layout="roam"] #tint,
+body[data-layout="roam"] #fx { display: none; }
+body[data-layout="roam"] #roam { display: block; }
+
+/* eva layout — NERV-terminal title cards. Opaque black void fullscreen;
+   everything lives inside #eva, driven by renderer/eva.js. */
+body[data-layout="eva"] #lyrics,
+body[data-layout="eva"] #stage,
+body[data-layout="eva"] #cover-panel,
+body[data-layout="eva"] #danmaku,
+body[data-layout="eva"] #convo,
+body[data-layout="eva"] #furin,
+body[data-layout="eva"] #roam,
+body[data-layout="eva"] #bg,
+body[data-layout="eva"] #tint,
+body[data-layout="eva"] #fx { display: none; }
+body[data-layout="eva"] #eva { display: block; }
+
+/* shinkai layout — the sky as protagonist. Opaque fullscreen canvas sky. */
+body[data-layout="shinkai"] #lyrics,
+body[data-layout="shinkai"] #stage,
+body[data-layout="shinkai"] #cover-panel,
+body[data-layout="shinkai"] #danmaku,
+body[data-layout="shinkai"] #convo,
+body[data-layout="shinkai"] #bg,
+body[data-layout="shinkai"] #tint,
+body[data-layout="shinkai"] #fx { display: none; }
+body[data-layout="shinkai"] #shinkai { display: block; }
+
+/* idol layout — the star stage. Opaque fullscreen canvas. */
+body[data-layout="idol"] #lyrics,
+body[data-layout="idol"] #stage,
+body[data-layout="idol"] #cover-panel,
+body[data-layout="idol"] #danmaku,
+body[data-layout="idol"] #convo,
+body[data-layout="idol"] #bg,
+body[data-layout="idol"] #tint,
+body[data-layout="idol"] #fx { display: none; }
+body[data-layout="idol"] #idol { display: block; }
+
+/* furin layout — hanging wind-chime ornament. Fully transparent canvas like
+   danmaku (no bg/tint/fx); everything lives inside #furin, driven by
+   renderer/furin.js. */
+body[data-layout="furin"] #lyrics,
+body[data-layout="furin"] #stage,
+body[data-layout="furin"] #cover-panel,
+body[data-layout="furin"] #danmaku,
+body[data-layout="furin"] #convo,
+body[data-layout="furin"] #bg,
+body[data-layout="furin"] #tint,
+body[data-layout="furin"] #fx { display: none; }
+body[data-layout="furin"] #furin { display: block; }
+
+/* ticket layout — collectible holo concert ticket. Fully transparent canvas
+   like furin; everything lives inside #ticket, driven by renderer/ticket.js. */
+body[data-layout="ticket"] #lyrics,
+body[data-layout="ticket"] #stage,
+body[data-layout="ticket"] #cover-panel,
+body[data-layout="ticket"] #danmaku,
+body[data-layout="ticket"] #convo,
+body[data-layout="ticket"] #bg,
+body[data-layout="ticket"] #tint,
+body[data-layout="ticket"] #fx { display: none; }
+body[data-layout="ticket"] #ticket { display: block; }
+
 /* single default look — one giant line, centered */
 body[data-layout="single"] #lyrics {
   text-align: center;
@@ -630,6 +704,919 @@ body.theme-danmaku {
    gradient with a soft glow; older bubbles muted. */
 body.theme-imsg .cv-bubble { align-self: flex-start; border-radius: 14px 14px 14px 4px; }
 body.theme-imsg .cv-bubble.past { opacity: 0.78; }
+
+/* ----- shinkai · the sky as protagonist / 云隙 ----- */
+body.theme-shinkai { box-shadow: none; border-radius: 0; }
+#shinkai {
+  display: none;
+  position: absolute; inset: 0;
+  z-index: 3; overflow: hidden;
+  background: #101a3e;
+}
+#shinkai .sk-cv { position: absolute; inset: 0; width: 100%; height: 100%; }
+#shinkai .sk-wires {
+  position: absolute; inset: 0;
+  width: 100%; height: 100%;
+  z-index: 2; pointer-events: none;
+}
+#shinkai .sk-wires path { stroke: #0d0f18; stroke-width: 2.5; fill: none; vector-effect: non-scaling-stroke; }
+#shinkai .sk-wires .sk-pole rect { fill: #0d0f18; }
+#shinkai .sk-wires .sk-pole line { stroke: #0d0f18; stroke-width: 4; vector-effect: non-scaling-stroke; }
+#shinkai .sk-wires .sk-birds path { fill: #0d0f18; stroke: none; }
+#shinkai .sk-lyric {
+  position: absolute; left: 8%; right: 8%; bottom: 12.5%;
+  z-index: 3; text-align: center;
+  font-family: "Hiragino Mincho ProN", "Songti SC", serif;
+  font-size: calc(30px * var(--fl-scale));
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  color: #ffffff;
+  text-shadow:
+    0 1px 16px rgba(255, 222, 170, 0.5),
+    0 0 34px rgba(255, 255, 255, 0.28),
+    0 1px 3px rgba(15, 20, 45, 0.9),
+    0 3px 14px rgba(15, 20, 45, 0.75);
+  opacity: 0;
+  transform: translateY(12px);
+  transition: opacity 650ms ease, transform 750ms cubic-bezier(0.2, 0.7, 0.3, 1);
+  pointer-events: none;
+}
+#shinkai .sk-lyric.show { opacity: 1; transform: translateY(0); }
+
+/* ----- idol · the star in the eye / 星瞳 ----- */
+body.theme-idol { box-shadow: none; border-radius: 0; }
+#idol {
+  display: none;
+  position: absolute; inset: 0;
+  z-index: 3; overflow: hidden;
+  background: #0e0a18;
+  --stageB: 0.5;
+}
+#idol .id-cv { position: absolute; inset: 0; width: 100%; height: 100%; }
+#idol .id-lyric {
+  position: absolute; left: 6%; right: 6%; top: 38%;
+  z-index: 3; text-align: center;
+  font-family: "Hiragino Maru Gothic ProN", "PingFang SC", "Hiragino Sans GB", sans-serif;
+  font-size: calc(40px * var(--fl-scale));
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  color: #fff;
+  /* the duality axis: glow blooms with stage energy, dims to backstage */
+  text-shadow:
+    0 0 calc(6px + var(--stageB, 0.5) * 20px) rgba(255, 95, 162, 0.55),
+    0 0 calc(14px + var(--stageB, 0.5) * 40px) rgba(176, 124, 255, 0.4),
+    0 2px 6px rgba(10, 6, 18, 0.8);
+  filter: brightness(calc(0.6 + var(--stageB, 0.5) * 0.4));
+  pointer-events: none;
+}
+#idol .id-word { display: inline-block; white-space: nowrap; }
+#idol .id-ch {
+  display: inline-block;
+  animation: id-pop 380ms cubic-bezier(0.2, 1.4, 0.4, 1) var(--d, 0ms) backwards;
+}
+@keyframes id-pop {
+  from { opacity: 0; transform: translateY(0.4em) scale(0.6); }
+  to   { opacity: 1; transform: translateY(0)     scale(1); }
+}
+#idol .id-star-ch { position: relative; }
+#idol .id-crown {
+  position: absolute;
+  width: 0.52em; height: 0.52em;
+  top: -0.34em; right: -0.2em;
+  animation: id-crown-in 520ms cubic-bezier(0.2, 1.5, 0.4, 1) var(--d, 0ms) backwards,
+             id-twinkle 2.4s ease-in-out 1s infinite alternate;
+  filter: drop-shadow(0 0 6px rgba(255, 95, 162, 0.8));
+}
+@keyframes id-crown-in {
+  from { opacity: 0; transform: scale(0) rotate(-90deg); }
+  to   { opacity: 1; transform: scale(1) rotate(0deg); }
+}
+@keyframes id-twinkle {
+  from { transform: scale(0.9) rotate(-6deg); }
+  to   { transform: scale(1.12) rotate(8deg); }
+}
+
+/* ----- eva · NERV-terminal title cards / 新世纪 ----- */
+/* Discipline: hard cuts only. The single allowed animation is a 2-step slam;
+   everything else either IS or ISN'T. Type = ultra-bold Mincho. */
+body.theme-eva { box-shadow: none; border-radius: 0; }
+#eva {
+  display: none;
+  position: absolute; inset: 0;
+  z-index: 3;
+  background: #050505;
+  overflow: hidden;
+  font-family: "Hiragino Mincho ProN", "Hiragino Mincho Pro", "Songti SC", "STSong", serif;
+}
+#eva .ev-fx { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 2; pointer-events: none; }
+#eva .ev-scan {
+  position: absolute; inset: 0; z-index: 4; pointer-events: none;
+  background: repeating-linear-gradient(0deg, rgba(255,255,255,0.016) 0 1px, transparent 1px 3px);
+}
+
+/* — title card — */
+#eva .ev-card {
+  position: absolute; inset: 0; z-index: 3;
+  color: #f2f0e8;
+  font-weight: 800;
+  pointer-events: none;
+}
+#eva .ev-card.slam { animation: ev-slam 100ms steps(2, end); }
+@keyframes ev-slam { from { transform: scale(1.045); } to { transform: scale(1); } }
+#eva .ev-card .red { color: #e60012; }
+#eva .ev-card.ev-invert { background: #f2f0e8; color: #0a0a0a; }
+#eva .ev-card.ev-invert .red { color: #e60012; }
+
+#eva .ev-row { white-space: nowrap; line-height: 1.02; letter-spacing: -0.015em; }
+#eva .ev-stack {
+  position: absolute; inset: 6% 5%;
+  display: flex; flex-direction: column; justify-content: center;
+}
+#eva .ev-stack .ev-r-left  { text-align: left; }
+#eva .ev-stack .ev-r-right { text-align: right; }
+#eva .ev-stack .ev-r-mid   { text-align: left; padding-left: 12%; }
+
+#eva .ev-vert {
+  position: absolute; top: 7%; right: 10%; bottom: 7%;
+  writing-mode: vertical-rl; text-orientation: upright;
+  line-height: 1.04; letter-spacing: 0.04em;
+}
+#eva .ev-note {
+  position: absolute; left: 7%; bottom: 8%;
+  font-family: "SF Mono", Menlo, monospace;
+  font-size: 13px; letter-spacing: 3px; opacity: 0.55;
+}
+#eva .ev-giant {
+  position: absolute; left: 3%; top: 50%;
+  transform: translateY(-54%);
+  line-height: 0.95; font-weight: 800;
+}
+#eva .ev-giant-rest {
+  position: absolute; right: 6%; bottom: 12%;
+  font-size: 34px; letter-spacing: 0.1em;
+}
+#eva .ev-dual-a { position: absolute; left: 5%; top: 12%; }
+#eva .ev-dual-b { position: absolute; right: 5%; bottom: 14%; }
+
+#eva .ev-tpl-idle .ev-idle-v {
+  position: absolute; right: 14%; top: 50%;
+  transform: translateY(-50%);
+  writing-mode: vertical-rl; text-orientation: upright;
+  font-size: 120px; letter-spacing: 0.3em;
+  color: rgba(242,240,232,0.22);
+}
+#eva .ev-tpl-idle .ev-idle-sub {
+  position: absolute; left: 8%; bottom: 10%;
+  font-family: "SF Mono", Menlo, monospace;
+  font-size: 12px; letter-spacing: 5px;
+  color: rgba(255,106,0,0.5);
+}
+
+/* — track lock-on sequence — */
+#eva .ev-stripes {
+  position: absolute; left: 0; right: 0; height: 64px; z-index: 7;
+  background: repeating-linear-gradient(-45deg, #ffd000 0 26px, #0a0a0a 26px 52px);
+  display: none;
+}
+#eva .ev-stripes-top { top: 0; }
+#eva .ev-stripes-bot { bottom: 0; }
+#eva.ev-warn .ev-stripes { display: block; }
+#eva .ev-flash { position: absolute; inset: 0; z-index: 8; background: #e60012; opacity: 0; pointer-events: none; }
+#eva.ev-warn-on .ev-flash { opacity: 0.26; }
+#eva .ev-tpl-warn .ev-warn-big {
+  position: absolute; left: 50%; top: 44%;
+  transform: translate(-50%, -50%);
+  font-size: min(24vw, 200px); font-weight: 800;
+  letter-spacing: 0.28em; text-indent: 0.28em;
+  color: #e60012;
+}
+#eva .ev-tpl-warn .ev-warn-sub {
+  position: absolute; left: 50%; top: 66%;
+  transform: translateX(-50%);
+  font-family: "SF Mono", Menlo, monospace;
+  font-size: 17px; letter-spacing: 14px; text-indent: 14px;
+  color: #f2f0e8;
+}
+#eva .ev-lock { position: absolute; inset: 0; z-index: 6; display: none; pointer-events: none; }
+#eva.ev-locking .ev-lock { display: block; }
+#eva .ev-hex {
+  position: absolute; left: 50%; top: 50%;
+  width: 300px; height: 300px;
+  clip-path: polygon(50% 0%, 93.3% 25%, 93.3% 75%, 50% 100%, 6.7% 75%, 6.7% 25%);
+  background: #ff6a00;
+  opacity: 0;
+}
+#eva .ev-hex::after {
+  content: '';
+  position: absolute; inset: 3px;
+  clip-path: polygon(50% 0%, 93.3% 25%, 93.3% 75%, 50% 100%, 6.7% 75%, 6.7% 25%);
+  background: #050505;
+}
+#eva .ev-target {
+  position: absolute; left: 50%; top: 50%;
+  transform: translate(-50%, -50%);
+  display: flex; flex-direction: column; align-items: center; gap: 18px;
+}
+#eva .ev-cover {
+  width: 150px; height: 150px; object-fit: cover;
+  clip-path: polygon(30% 0, 70% 0, 100% 30%, 100% 70%, 70% 100%, 30% 100%, 0 70%, 0 30%);
+  filter: grayscale(1) contrast(1.15) brightness(0.9);
+}
+#eva .ev-target-text {
+  font-family: "SF Mono", Menlo, monospace;
+  font-size: 13px; letter-spacing: 2px; color: #9dff00;
+  max-width: 70vw; white-space: nowrap; overflow: hidden;
+}
+
+/* ----- roam · desktop-wide kinetic typography / 漫游 ----- */
+/* JS (roam.js) is the director: it picks a pattern, position and duration
+   per lyric line and writes them as custom properties. This block is the
+   complete choreography library — four line-level patterns + three
+   character-level entrances. --rm-beat (0..1, set on #roam by onsets) adds
+   an accent glow to whatever is currently on stage. */
+body.theme-roam {
+  box-shadow: none;
+  border-radius: 0;
+}
+#roam {
+  display: none;
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+  overflow: hidden;
+}
+.rm-line {
+  position: absolute;
+  font-family:    var(--fl-text-font, inherit);
+  font-weight:    var(--fl-text-weight, 800);
+  letter-spacing: var(--fl-letter-spacing, 0.4px);
+  line-height: 1.3;
+  color: var(--fl-text-color, #fff);
+  -webkit-text-stroke: var(--fl-text-stroke, 0);
+  text-shadow: var(--fl-text-shadow, 0 2px 6px rgba(0, 0, 0, 0.85)),
+               0 0 calc(var(--rm-beat, 0) * 22px) var(--accent-soft),
+               0 0 calc(var(--rm-beat, 0) * 46px) var(--accent-glow);
+  will-change: transform, opacity, filter;
+}
+.rm-size-s { font-size: calc(22px * var(--fl-scale) * var(--fl-text-scale-bias, 1)); }
+.rm-size-m { font-size: calc(30px * var(--fl-scale) * var(--fl-text-scale-bias, 1)); }
+.rm-size-l { font-size: calc(42px * var(--fl-scale) * var(--fl-text-scale-bias, 1)); }
+.rm-line .rw  { display: inline-block; white-space: nowrap; }
+.rm-line .rc  { display: inline-block; }
+.rm-line .rci { display: inline-block; animation-fill-mode: backwards; }
+.rm-line.evict {
+  opacity: 0 !important;
+  transition: opacity 260ms ease-out;
+}
+
+/* drift — fade in, travel with the wind (--tx/--ty), dissolve */
+.rm-drift {
+  max-width: 36vw;
+  animation: rm-drift var(--dur, 4s) linear forwards;
+}
+@keyframes rm-drift {
+  0%   { opacity: 0; transform: translate3d(0, 0, 0); }
+  8%   { opacity: 1; }
+  84%  { opacity: 1; filter: blur(0); }
+  100% { opacity: 0; transform: translate3d(var(--tx, 12vw), var(--ty, 0vh), 0); filter: blur(7px); }
+}
+.rm-drift .rci {
+  animation: rci-rise 320ms cubic-bezier(0.2, 0.8, 0.2, 1) var(--d, 0ms) backwards;
+}
+
+/* traverse — one slow diagonal across the whole desktop */
+.rm-traverse {
+  left: 0; top: 0;
+  white-space: nowrap;
+  animation: rm-traverse var(--dur, 9s) linear forwards;
+}
+@keyframes rm-traverse {
+  0%   { opacity: 0; transform: translate3d(var(--x0, -30vw), var(--y0, 12vh), 0); }
+  6%   { opacity: 1; }
+  94%  { opacity: 1; }
+  100% { opacity: 0.85; transform: translate3d(var(--x1, 105vw), var(--y1, 70vh), 0); }
+}
+
+/* bloom — appear at center; letter-spacing pulls the characters apart
+   toward both sides for the whole life of the line */
+.rm-bloom {
+  max-width: 64vw;
+  text-align: center;
+  transform: translate(-50%, -50%);
+  animation: rm-bloom var(--dur, 4s) ease-out forwards;
+}
+@keyframes rm-bloom {
+  0%   { opacity: 0; letter-spacing: 0.01em; transform: translate(-50%, -50%) scale(0.96); }
+  9%   { opacity: 1; }
+  78%  { opacity: 1; filter: blur(0); }
+  100% { opacity: 0; letter-spacing: 0.24em; transform: translate(-50%, -50%) scale(1.05); filter: blur(7px); }
+}
+.rm-bloom .rci {
+  animation: rci-pop 360ms cubic-bezier(0.2, 0.8, 0.2, 1) var(--d, 0ms) backwards;
+}
+
+/* cascade — characters step down a small staircase, then the line drops */
+.rm-cascade {
+  white-space: nowrap;
+  animation: rm-cascade var(--dur, 3s) ease-in forwards;
+}
+.rm-cascade .rc { transform: translateY(calc(var(--i, 0) * 0.14em)); }
+@keyframes rm-cascade {
+  0%   { opacity: 0; transform: translateY(0); }
+  6%   { opacity: 1; }
+  82%  { opacity: 1; transform: translateY(0); filter: blur(0); }
+  100% { opacity: 0; transform: translateY(0.6em); filter: blur(5px); }
+}
+.rm-cascade .rci {
+  animation: rci-drop 300ms cubic-bezier(0.2, 1.2, 0.4, 1) var(--d, 0ms) backwards;
+}
+
+/* character entrances */
+@keyframes rci-rise {
+  from { opacity: 0; transform: translateY(0.45em); filter: blur(4px); }
+  to   { opacity: 1; transform: translateY(0);      filter: blur(0); }
+}
+@keyframes rci-pop {
+  from { opacity: 0; transform: scale(1.35); filter: blur(5px); }
+  to   { opacity: 1; transform: scale(1);    filter: blur(0); }
+}
+@keyframes rci-drop {
+  from { opacity: 0; transform: translateY(-0.55em); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ----- furin · hanging glass wind-chime / 风铃 ----- */
+/* The window is a fully transparent strip; the chime is the only thing in
+   it, so the body chrome (shadow/radius) is suppressed like danmaku. All
+   motion is JS-driven inline transforms (renderer/furin.js); this block only
+   paints the materials: cord, glass, bead, paper. */
+body.theme-furin {
+  box-shadow: none;
+  border-radius: 0;
+}
+#furin {
+  display: none;
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  overflow: hidden;
+  pointer-events: none;
+}
+#furin .fr-anchor {
+  position: absolute;
+  left: 50%; top: 0;
+  width: 0; height: 0;
+  transform: scale(var(--fl-scale));
+  transform-origin: 0 0;
+  /* One scene-wide perspective so the depth swing (rotateX) and the paper
+     twist (rotateY) foreshorten believably. Short focal length on purpose —
+     face-on depth barely projects, so the camera leans close to make the
+     front-back swing scale-shift readable. Eye level sits between the mouth
+     and the paper so residual keystone stays symmetric instead of lopsided. */
+  perspective: 600px;
+  perspective-origin: 0px 300px;
+}
+#furin .fr-link {
+  position: absolute;
+  transform-origin: 0 0;
+  transform-style: preserve-3d;
+  will-change: transform;
+}
+#furin .fr-l0 { left: 0; top: 0; }
+#furin .fr-bell-svg {
+  position: absolute;
+  left: -80px; top: -10px;
+  overflow: visible;
+  filter: drop-shadow(0 14px 24px rgba(0, 0, 0, 0.20));
+  transition: filter 420ms var(--ease-out);
+}
+#furin .fr-bell-svg.striking {
+  filter: drop-shadow(0 14px 24px rgba(0, 0, 0, 0.20))
+          drop-shadow(0 0 18px var(--accent-glow))
+          brightness(1.2);
+  transition: filter 60ms ease-in;
+}
+#furin .fr-cord {
+  stroke: rgba(86, 64, 44, 0.92);
+  stroke-width: 1.8;
+}
+#furin .fr-knot { fill: rgba(70, 52, 36, 0.95); }
+#furin .fr-glass {
+  stroke: color-mix(in srgb, var(--accent) 30%, rgba(255, 255, 255, 0.8));
+  stroke-opacity: 0.5;
+  stroke-width: 0.8;
+}
+#furin .fr-deco path {
+  stroke: color-mix(in srgb, var(--accent) 85%, #1f2630);
+  fill: none;
+  stroke-linecap: round;
+  opacity: 0.52;
+}
+#furin .fr-deco .fr-d1 { stroke-width: 4.5; }
+#furin .fr-deco .fr-d2 { stroke-width: 3.5; opacity: 0.44; }
+#furin .fr-deco .fr-d3 { stroke-width: 3;   opacity: 0.36; }
+#furin .fr-bloom { opacity: 0.45; }
+#furin .fr-speck { fill: rgba(255, 255, 255, 0.4); }
+#furin .fr-crescent {
+  stroke: rgba(255, 255, 255, 0.22);
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+#furin .fr-bowlight {
+  stroke: rgba(255, 255, 255, 0.17);
+  stroke-width: 3;
+  stroke-linecap: round;
+}
+#furin .fr-mouth-shadow { fill: rgba(36, 30, 52, 0.14); }
+#furin .fr-rim {
+  stroke: rgba(255, 255, 255, 0.30);
+  stroke-width: 1.4;
+  stroke-linecap: round;
+}
+
+/* Invisible markers at the two rim edges — strike() reads their live screen
+   position (getBoundingClientRect) to place the expanding sound-rings. */
+#furin .fr-mouth-mark {
+  position: absolute;
+  width: 0; height: 0;
+  top: 178px;
+}
+#furin .fr-mouth-l { left: -31px; }
+#furin .fr-mouth-r { left: 31px; }
+
+#furin .fr-l1 { left: 0; top: 120px; }
+#furin .fr-thread {
+  position: absolute;
+  left: -0.6px; top: 0;
+  width: 1.2px; height: 74px;
+  /* Upper segment sits behind the glass (attach point is inside the bell) —
+     barely-there in there, solid only after it exits the mouth. */
+  background: linear-gradient(180deg,
+    rgba(64, 48, 32, 0.14) 0px,
+    rgba(64, 48, 32, 0.16) 52px,
+    rgba(64, 48, 32, 0.78) 61px,
+    rgba(64, 48, 32, 0.78) 100%);
+}
+#furin .fr-bead {
+  position: absolute;
+  left: -5.5px; top: 68.5px;
+  width: 11px; height: 11px;
+  border-radius: 999px;
+  background:
+    radial-gradient(circle at 32% 26%, rgba(255, 255, 255, 0.9) 0 8%, rgba(255, 255, 255, 0) 36%),
+    radial-gradient(circle at 35% 30%, #f7ecd9, #bb9f74 62%, #7e6443);
+  box-shadow:
+    inset -1px -1.5px 2px rgba(70, 50, 28, 0.45),
+    0 1px 3px rgba(0, 0, 0, 0.35);
+}
+#furin .fr-l2 { left: 0; top: 74px; }
+#furin .tz-thread {
+  position: absolute;
+  left: -0.6px; top: 4.5px;
+  width: 1.2px; height: 15.5px;
+  /* Starts right under the bead; lifted a hair toward the viewer so it lies
+     *on* the paper down to the hole — threaded through, not glued behind. */
+  background: linear-gradient(180deg,
+    rgba(64, 48, 32, 0.0),
+    rgba(64, 48, 32, 0.78) 1.5px);
+  transform: translateZ(1.5px);
+}
+#furin .fr-tz {
+  position: absolute;
+  left: -23px; top: 12px;
+  width: 46px; height: 200px;
+  transform-style: preserve-3d;
+}
+#furin .tz-paper {
+  position: absolute;
+  inset: 0;
+  /* Pivot at the hole: the thread passes through it, so it's the kinematic
+     constraint — every paper transform (counter-pitch, twist, flutter skew)
+     hinges there and the hole stays glued to the thread tip. The flutter
+     becomes a tail-wag, which is also how a real strip moves. */
+  transform-origin: 50% 8px;
+  border-radius: 2px 2px 3px 3px;
+  background:
+    repeating-linear-gradient(0deg, rgba(150, 118, 64, 0.03) 0 1px, transparent 1px 3px),
+    linear-gradient(175deg, #fbf7ed, #f2ebda 60%, #eae1cc);
+  box-shadow:
+    inset 0 0 0 0.5px rgba(120, 90, 40, 0.20),
+    inset 0 1px 0 rgba(255, 255, 255, 0.7),
+    0 2px 6px rgba(0, 0, 0, 0.18),
+    0 12px 24px -8px rgba(0, 0, 0, 0.22);
+  will-change: transform;
+}
+#furin .tz-hole {
+  position: absolute;
+  top: 6px; left: 50%;
+  width: 3.5px; height: 3.5px;
+  margin-left: -1.75px;
+  border-radius: 999px;
+  background: rgba(96, 72, 44, 0.5);
+  box-shadow: inset 0 0.5px 1px rgba(0, 0, 0, 0.45);
+}
+#furin .tz-text {
+  position: absolute;
+  inset: 16px 3px 22px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  overflow: hidden;
+}
+#furin .tz-text span {
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
+  max-height: 100%;
+  font-family: "Kaiti SC", "STKaiti", "Songti SC", "Noto Serif CJK SC", serif;
+  font-size: 17px;
+  font-weight: 600;
+  line-height: 1.32;
+  letter-spacing: 0.14em;
+  color: #3a2f22;
+  text-shadow: 0 0.5px 0 rgba(255, 255, 255, 0.5);
+}
+#furin .tz-seal {
+  position: absolute;
+  bottom: 9px; left: 50%;
+  width: 9px; height: 9px;
+  margin-left: -4.5px;
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--accent) 30%, #c43e2c);
+  opacity: 0.85;
+}
+
+/* Sound made visible: a thin ring expands from the struck rim edge. --ri is
+   strike intensity (0..1); --ring-accent-mix biases color by spectral
+   centroid (bright hits ring whiter). */
+#furin .fr-ring {
+  position: absolute;
+  width: 44px; height: 44px;
+  margin: -22px 0 0 -22px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--accent) var(--ring-accent-mix, 40%), #ffffff);
+  opacity: calc(0.15 + var(--ri, 0.6) * 0.32);
+  animation: fr-ring 750ms cubic-bezier(0.17, 0.67, 0.35, 1) forwards;
+  pointer-events: none;
+}
+#furin .fr-ring.echo {
+  width: 30px; height: 30px;
+  margin: -15px 0 0 -15px;
+  animation-duration: 950ms;
+}
+@keyframes fr-ring {
+  from { transform: scale(0.25); }
+  to   { transform: scale(calc(0.55 + var(--ri, 0.6) * 0.85)); opacity: 0; }
+}
+
+/* ----- ticket · collectible hologram concert ticket / 镭射票 ----- */
+/* The window is a transparent vertical strip; the card is the only thing in
+   it. Motion (admire-tilt, bob) is JS-driven inline transforms plus two CSS
+   vars written per frame by renderer/ticket.js:
+     --lp   light position, 0..100 — THE shared light state; every foil layer
+            derives its background-position from it (different multipliers =
+            counter-parallax, the depth a real hologram has)
+     --hue  diffraction hue bias from the spectral centroid
+   This block only paints materials: card stock, halftone, prism shards,
+   foil-stamped lyric, stub plate, barcode, chop, pile. */
+body.theme-ticket {
+  box-shadow: none;
+  border-radius: 0;
+}
+#ticket {
+  display: none;
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  overflow: hidden;
+  pointer-events: none;
+}
+#ticket .tk-scale {
+  position: absolute;
+  left: 50%; top: 50%;
+  width: 380px; height: 720px;
+  margin: -360px 0 0 -190px;
+  transform: scale(var(--fl-scale));
+  perspective: 900px;
+  perspective-origin: 50% 42%;
+}
+#ticket .tk-float {
+  position: absolute;
+  inset: 0;
+  will-change: transform;
+  filter: drop-shadow(0 26px 38px rgba(0, 0, 0, 0.45));
+}
+#ticket .tk-card {
+  position: absolute;
+  left: 50%; top: 64px;
+  width: 292px; height: 496px;
+  margin-left: -146px;
+  transform-style: preserve-3d;
+  will-change: transform;
+  /* Punch the perforation notches out of the card edges. */
+  --py: 402px;
+  mask-image:
+    radial-gradient(circle 11px at -2px var(--py), transparent 10px, #000 10.5px),
+    radial-gradient(circle 11px at calc(100% + 2px) var(--py), transparent 10px, #000 10.5px);
+  mask-composite: intersect;
+  -webkit-mask-composite: source-in;
+}
+
+/* Card stock: deep accent-dyed navy, like the dark VIP variant. */
+#ticket .tk-main {
+  position: absolute;
+  left: 0; top: 0; right: 0;
+  height: 400px;
+  border-radius: 16px 16px 0 0;
+  overflow: hidden;
+  background:
+    radial-gradient(120% 90% at 18% 0%, color-mix(in srgb, var(--accent) 26%, #1b1538), transparent 60%),
+    linear-gradient(168deg, color-mix(in srgb, var(--accent) 14%, #171130), #0e0a20 70%, #0b0819);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.10);
+}
+#ticket .tk-halftone {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(circle at 2px 2px, rgba(190, 172, 255, 0.13) 1.3px, transparent 1.9px),
+    radial-gradient(circle at 2px 2px, rgba(190, 172, 255, 0.07) 2.1px, transparent 2.8px);
+  background-size: 11px 11px, 23px 23px;
+  background-position: 0 0, 5px 7px;
+  -webkit-mask-image: linear-gradient(155deg, #000 30%, rgba(0, 0, 0, 0.25) 75%, transparent);
+          mask-image: linear-gradient(155deg, #000 30%, rgba(0, 0, 0, 0.25) 75%, transparent);
+}
+#ticket .tk-frame {
+  position: absolute;
+  inset: 8px;
+  border: 1px solid color-mix(in srgb, var(--accent) 40%, rgba(190, 225, 255, 0.35));
+  border-radius: 11px 11px 0 0;
+  border-bottom: none;
+  opacity: 0.5;
+}
+
+/* Prism shards: pastel rainbow + triangle lattice, lit by --lp, hue-bent by
+   the centroid. The big one is the lightning bolt behind the lyric. */
+#ticket .tk-shard {
+  position: absolute;
+  background:
+    repeating-linear-gradient(60deg,  rgba(255, 255, 255, 0.10) 0 1px, transparent 1px 13px),
+    repeating-linear-gradient(-60deg, rgba(255, 255, 255, 0.10) 0 1px, transparent 1px 13px),
+    repeating-linear-gradient(0deg,   rgba(255, 255, 255, 0.07) 0 1px, transparent 1px 13px),
+    radial-gradient(48% 38% at 50% 32%, rgba(255, 255, 255, 0.40), rgba(255, 255, 255, 0.06) 55%, transparent 75%),
+    linear-gradient(118deg,
+      #ff9ec6, #ffd58e 18%, #9ef0b2 36%, #8fd8ff 54%, #b3a1ff 72%, #ff9ede 90%, #ffd58e);
+  background-size: auto, auto, auto, auto, 320% 100%;
+  background-position: 0 0, 0 0, 0 0, 0 0, calc(var(--lp, 50) * 1%) 0;
+  filter: hue-rotate(var(--hue, 0deg)) saturate(1.05);
+}
+#ticket .tk-shard-big {
+  left: 24px; top: 30px;
+  width: 244px; height: 330px;
+  opacity: 0.85;
+  clip-path: polygon(
+    44% 0%, 72% 0%, 56% 25%, 78% 25%, 32% 70%, 47% 70%, 24% 100%,
+    35% 58%, 17% 58%, 41% 21%, 24% 21%);
+}
+#ticket .tk-shard-s1 {
+  left: 18px; top: 268px;
+  width: 92px; height: 70px;
+  opacity: 0.5;
+  background-position: 0 0, 0 0, 0 0, 0 0, calc(var(--lp, 50) * -1.4%) 0;
+  clip-path: polygon(0% 38%, 62% 0%, 100% 14%, 38% 56%, 70% 62%, 8% 100%);
+}
+#ticket .tk-shard-s2 {
+  right: 16px; top: 52px;
+  width: 76px; height: 58px;
+  opacity: 0.42;
+  background-position: 0 0, 0 0, 0 0, 0 0, calc(var(--lp, 50) * -1.4%) 0;
+  clip-path: polygon(8% 0%, 100% 22%, 54% 48%, 92% 70%, 0% 100%, 30% 44%);
+}
+
+/* Billing chrome */
+#ticket .tk-tour {
+  position: absolute;
+  left: 22px; top: 21px;
+  font-size: 8px; font-weight: 600; letter-spacing: 2.4px;
+  color: rgba(235, 240, 255, 0.55);
+}
+#ticket .tk-vip {
+  position: absolute;
+  right: 17px; top: 17px;
+  padding: 2px 8px;
+  border: 1px solid color-mix(in srgb, var(--accent) 50%, rgba(220, 235, 255, 0.5));
+  border-radius: 3px;
+  transform: rotate(6deg);
+  font-size: 9px; font-weight: 800; letter-spacing: 2px; font-style: italic;
+  color: rgba(240, 245, 255, 0.85);
+}
+#ticket .tk-side {
+  position: absolute;
+  right: 13px; top: 88px;
+  writing-mode: vertical-rl;
+  font-size: 7.5px; letter-spacing: 2.5px;
+  color: rgba(235, 240, 255, 0.30);
+}
+#ticket .tk-title {
+  position: absolute;
+  left: 22px; top: 44px;
+  max-width: 226px;
+  font-size: 30px; font-weight: 900; letter-spacing: 1px; line-height: 1.16;
+  color: #f4f7ff;
+  text-shadow: 0 2px 10px rgba(8, 6, 24, 0.7);
+}
+#ticket .tk-artist {
+  position: absolute;
+  left: 23px; top: 122px;
+  max-width: 220px;
+  font-size: 11px; font-weight: 600; letter-spacing: 2.5px;
+  color: color-mix(in srgb, var(--accent) 28%, #eef2ff);
+  text-shadow: 0 1px 6px rgba(8, 6, 24, 0.8);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
+/* The lyric: foil-stamped, lit by the same --lp (counter-parallax against
+   the shard), readable as silvery print between sweeps. */
+#ticket .tk-lyric {
+  position: absolute;
+  left: 24px; right: 24px; top: 168px;
+  height: 168px;
+  display: flex;
+  align-items: center;
+  transform: rotate(-3deg);
+}
+#ticket .tk-lyric span {
+  font-size: 27px; font-weight: 800; letter-spacing: 2px; line-height: 1.45;
+  text-wrap: balance;
+  background: linear-gradient(105deg,
+    #ffffff 8%, #ffdcec 26%, #cdeeff 44%, #e4d9ff 62%, #ffffff 80%, #ffe7cf 96%);
+  background-size: 260% 100%;
+  background-position: calc(var(--lp, 50) * -1.2%) 0;
+  -webkit-background-clip: text;
+          background-clip: text;
+  color: transparent;
+  filter: hue-rotate(var(--hue, 0deg)) drop-shadow(0 1.5px 1px rgba(8, 6, 20, 0.75));
+}
+#ticket .tk-lyric span.stamp { animation: tk-stamp 340ms ease-out; }
+@keyframes tk-stamp {
+  0%   { transform: scale(1.10); filter: hue-rotate(var(--hue, 0deg)) brightness(2.4) drop-shadow(0 1.5px 1px rgba(8, 6, 20, 0.75)); }
+  55%  { transform: scale(0.99); filter: hue-rotate(var(--hue, 0deg)) brightness(1.35) drop-shadow(0 1.5px 1px rgba(8, 6, 20, 0.75)); }
+  100% { transform: scale(1); }
+}
+#ticket .tk-meta {
+  position: absolute;
+  left: 22px; right: 20px; bottom: 14px;
+  display: flex;
+  justify-content: space-between;
+  font-size: 9px; letter-spacing: 1.5px;
+  color: rgba(235, 240, 255, 0.50);
+}
+
+/* Specular sweep — one-shot, intensity from the onset velocity (--sv). */
+#ticket .tk-sheen {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  background: linear-gradient(115deg,
+    transparent 32%, rgba(255, 255, 255, 0.50) 46%,
+    rgba(190, 235, 255, 0.18) 53%, transparent 66%);
+  transform: translateX(-130%);
+}
+#ticket .tk-sheen.on { animation: tk-sheen 560ms cubic-bezier(0.25, 0.6, 0.3, 1) forwards; }
+@keyframes tk-sheen {
+  0%   { transform: translateX(-130%); opacity: calc(var(--sv, 0.6) * 0.9); }
+  100% { transform: translateX(130%);  opacity: 0; }
+}
+
+/* 散场 chop — playback stopped; the show is over but the billing stays. */
+#ticket .tk-stamp {
+  position: absolute;
+  left: 50%; top: 196px;
+  width: 92px; height: 92px;
+  margin-left: -46px;
+  border: 2.5px solid rgba(255, 86, 80, 0.8);
+  border-radius: 50%;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  transform: rotate(-14deg) scale(1.6);
+  opacity: 0;
+  pointer-events: none;
+  color: rgba(255, 96, 88, 0.92);
+  text-shadow: 0 0 12px rgba(255, 70, 60, 0.45);
+}
+#ticket .tk-stamp b { font-size: 21px; font-weight: 800; letter-spacing: 7px; text-indent: 7px; }
+#ticket .tk-stamp i { font-style: normal; font-size: 7px; letter-spacing: 2px; margin-top: 3px; opacity: 0.8; }
+#ticket .tk-stamp.on { animation: tk-chop 420ms cubic-bezier(0.2, 1.3, 0.35, 1) forwards; }
+@keyframes tk-chop {
+  0%   { transform: rotate(-14deg) scale(1.6); opacity: 0; }
+  60%  { transform: rotate(-14deg) scale(0.96); opacity: 0.95; }
+  100% { transform: rotate(-14deg) scale(1); opacity: 0.9; }
+}
+
+/* Perforation + stub */
+#ticket .tk-perf {
+  position: absolute;
+  left: 12px; right: 12px; top: 401px;
+  border-top: 2px dashed rgba(235, 240, 255, 0.22);
+}
+#ticket .tk-stub {
+  position: absolute;
+  left: 0; right: 0; bottom: 0;
+  height: 94px;
+  border-radius: 0 0 16px 16px;
+  overflow: hidden;
+  background:
+    radial-gradient(140% 120% at 50% 0%, color-mix(in srgb, var(--accent) 18%, #1d1738), transparent 55%),
+    linear-gradient(180deg, #141028, #0d0a1d);
+  box-shadow: inset 0 -1px 0 rgba(255, 255, 255, 0.05);
+}
+#ticket .tk-plate {
+  position: absolute;
+  left: 50%; top: 13px;
+  transform: translateX(-50%);
+  min-width: 150px; max-width: 230px;
+  padding: 4px 16px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #fbfcff, #dfe4f2);
+  box-shadow:
+    inset 0 -1px 0 rgba(110, 120, 160, 0.4),
+    0 1px 4px rgba(0, 0, 0, 0.4);
+  text-align: center;
+}
+#ticket .tk-plate span {
+  display: block;
+  font-size: 12px; font-weight: 800; font-style: italic; letter-spacing: 2px;
+  color: #232a44;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+#ticket .tk-bar {
+  position: absolute;
+  left: 50%; bottom: 26px;
+  width: 168px; height: 20px;
+  transform: translateX(-50%);
+  background: repeating-linear-gradient(90deg,
+    rgba(238, 242, 255, 0.85) 0 1.5px, transparent 1.5px 4px,
+    rgba(238, 242, 255, 0.85) 4px 6.5px, transparent 6.5px 8px,
+    rgba(238, 242, 255, 0.85) 8px 9px, transparent 9px 12px);
+}
+#ticket .tk-no {
+  position: absolute;
+  left: 0; right: 0; bottom: 9px;
+  text-align: center;
+  font-size: 7px; letter-spacing: 1.5px;
+  color: rgba(235, 240, 255, 0.40);
+}
+
+/* Tear / deal — the song-change ritual. Origins sit at the perforation so
+   both halves hinge where the paper actually gives. */
+#ticket .tk-card.tearing .tk-main,
+#ticket .tk-card.tearing .tk-perf {
+  animation: tk-tear-main 620ms cubic-bezier(0.4, 0.05, 0.7, 0.3) forwards;
+  transform-origin: 50% 401px;
+}
+#ticket .tk-card.tearing .tk-stub {
+  animation: tk-tear-stub 620ms cubic-bezier(0.5, 0.05, 0.8, 0.4) forwards;
+  transform-origin: 18% 0%;
+}
+@keyframes tk-tear-main {
+  0%   { transform: none; opacity: 1; }
+  30%  { transform: translateY(-6px) rotate(-1.2deg); opacity: 1; }
+  100% { transform: translateY(-34px) rotate(-3deg); opacity: 0; }
+}
+@keyframes tk-tear-stub {
+  0%   { transform: none; opacity: 1; }
+  25%  { transform: rotate(4deg); opacity: 1; }
+  100% { transform: translate(14px, 110px) rotate(13deg); opacity: 0; }
+}
+#ticket .tk-card.dealing { animation: tk-deal 580ms cubic-bezier(0.18, 0.9, 0.28, 1.06); }
+@keyframes tk-deal {
+  0%   { transform: translateY(56px) rotate(2.6deg); opacity: 0; }
+  100% { transform: none; opacity: 1; }
+}
+
+/* Tonight's setlist: torn stubs pile up under the card. */
+#ticket .tk-pile {
+  position: absolute;
+  left: 50%; top: 568px;
+  width: 0;
+}
+#ticket .tk-pstub {
+  position: absolute;
+  left: -106px; top: 0;
+  width: 212px; height: 40px;
+  border-radius: 8px;
+  transform: translateY(calc(var(--pi) * 9px)) rotate(var(--pr));
+  display: flex; align-items: center; justify-content: center;
+  padding: 0 18px;
+  background:
+    radial-gradient(120% 130% at 50% 0%, color-mix(in srgb, var(--accent) 14%, #1b1534), transparent 60%),
+    linear-gradient(180deg, #151028, #0d0a1c);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.07),
+    0 4px 10px rgba(0, 0, 0, 0.4);
+  font-size: 9.5px; letter-spacing: 1.5px;
+  color: rgba(235, 240, 255, 0.55);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  opacity: calc(1 - var(--pi) * 0.17);
+}
 
 /* ----- subtitle · transparent desktop lyric strip ----- */
 body.theme-subtitle {

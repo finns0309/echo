@@ -1,0 +1,252 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>echo · 轨迹 原型</title>
+<style>
+  :root { color-scheme: dark; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 100%; height: 100%; overflow: hidden; }
+  body {
+    background: radial-gradient(140% 120% at 50% 40%, #121319 0%, #0c0d12 55%, #07080b 100%);
+    font: 13px/1.5 -apple-system, "PingFang SC", "Hiragino Sans", system-ui, sans-serif;
+    color: #fff;
+  }
+  #c { position: fixed; inset: 0; width: 100%; height: 100%; display: block; z-index: 0; }
+  #vignette { position: fixed; inset: 0; z-index: 1; pointer-events: none;
+    background: radial-gradient(135% 120% at 50% 50%, transparent 50%, rgba(0,0,0,0.52) 100%); }
+  #grain { position: fixed; inset: 0; z-index: 2; pointer-events: none; opacity: 0.035;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"); }
+
+  #panel {
+    position: fixed; left: 18px; bottom: 18px; z-index: 10;
+    width: 272px; padding: 14px 16px 16px;
+    background: rgba(20,20,26,0.6); backdrop-filter: blur(20px) saturate(1.4);
+    -webkit-backdrop-filter: blur(20px) saturate(1.4);
+    border: 0.5px solid rgba(255,255,255,0.1); border-radius: 16px;
+    box-shadow: 0 18px 50px -20px rgba(0,0,0,0.7); user-select: none;
+    transition: opacity 240ms ease, transform 240ms ease;
+  }
+  #panel.hidden { opacity: 0; transform: translateY(8px); pointer-events: none; }
+  #panel h1 { font-size: 12px; font-weight: 600; letter-spacing: 0.3px; opacity: 0.9; margin-bottom: 2px; }
+  #panel .sub { font-size: 10.5px; opacity: 0.42; margin-bottom: 10px; }
+  .row { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
+  .row label { width: 40px; font-size: 11px; opacity: 0.6; flex: none; }
+  .row input[type=range] { flex: 1; accent-color: #b496f5; height: 3px; }
+  .row .val { width: 34px; text-align: right; font-variant-numeric: tabular-nums; font-size: 10.5px; opacity: 0.55; }
+  .btns { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
+  button {
+    font: inherit; font-size: 11.5px; color: #fff; background: rgba(255,255,255,0.07);
+    border: 0.5px solid rgba(255,255,255,0.12); border-radius: 9px; padding: 6px 11px; cursor: pointer;
+    transition: background 140ms ease, transform 100ms ease;
+  }
+  button:hover { background: rgba(255,255,255,0.13); }
+  button:active { transform: scale(0.94); }
+  button.primary { background: rgba(180,150,245,0.26); border-color: rgba(180,150,245,0.42); }
+  button.on { background: rgba(120,230,150,0.22); border-color: rgba(120,230,150,0.4); }
+  .sw { display: flex; gap: 6px; }
+  .sw i { width: 20px; height: 20px; border-radius: 6px; cursor: pointer; border: 1.5px solid transparent; transition: transform 100ms; }
+  .sw i:hover { transform: scale(1.12); }
+  .sw i.sel { border-color: rgba(255,255,255,0.85); }
+  .hint { margin-top: 12px; font-size: 10px; opacity: 0.34; line-height: 1.6; }
+  kbd { font: inherit; font-size: 9.5px; padding: 1px 4px; border-radius: 4px;
+        background: rgba(255,255,255,0.1); border: 0.5px solid rgba(255,255,255,0.14); }
+</style>
+</head>
+<body>
+  <canvas id="c"></canvas>
+  <div id="vignette"></div>
+  <div id="grain"></div>
+
+  <div id="panel">
+    <h1>echo · 轨迹 原型</h1>
+    <div class="sub">每首歌 = 一条路 · 亮头是此刻，身后是听过的，前方是未知</div>
+
+    <div class="btns">
+      <button id="play" class="primary" style="flex:1">▶ 播放</button>
+      <button id="next">⏭ 下一首</button>
+    </div>
+    <div class="row"><label>进度</label><input id="seek" type="range" min="0" max="1000" value="0"><span class="val" id="seekV">0%</span></div>
+    <div class="btns" style="margin-top:4px">
+      <span style="font-size:11px;opacity:.6;align-self:center;margin-right:2px">时长</span>
+      <button data-dur="90">1:30</button><button data-dur="180" class="on">3:00</button><button data-dur="300">5:00</button>
+    </div>
+
+    <div class="row" style="margin-top:12px"><label>封面色</label>
+      <div class="sw" id="sw">
+        <i data-c="violet" style="background:#b496f5" class="sel"></i>
+        <i data-c="teal"   style="background:#6ecdcd"></i>
+        <i data-c="rose"   style="background:#e58296"></i>
+        <i data-c="warm"   style="background:#e6af5f"></i>
+        <i data-c="ice"    style="background:#8fbef5"></i>
+      </div>
+    </div>
+    <div class="row"><label>微动</label><input id="motion" type="range" min="0" max="100" value="50"><span class="val" id="motionV">50</span></div>
+
+    <div class="hint">
+      拖「进度」看路走到哪 · 身后的点是听过的句子（记忆）<br>
+      <kbd>空格</kbd> 播放 &nbsp; <kbd>N</kbd> 下一首（新路） &nbsp; <kbd>H</kbd> 面板
+    </div>
+  </div>
+
+<script>
+// ─────────────────────────────────────────────────────────────────────────
+//  echo · trail ornament prototype
+//  Each song is a path the widget draws across the frame as it plays. The
+//  glowing head is "now"; the bright stroke behind it is what you've heard;
+//  the faint hairline ahead is the unheard rest. So progress is legible as
+//  distance travelled — and uniquely, the PAST stays on screen (a light touch
+//  of "temporal memory"). Driver = `progress` (currentTime/duration in the app),
+//  simulated by play/seek here. The head breathes + sheds motes so it's alive
+//  even paused. Pure canvas.
+// ─────────────────────────────────────────────────────────────────────────
+const cv = document.getElementById('c');
+const ctx = cv.getContext('2d');
+let W = 0, H = 0, DPR = 1;
+function resize() {
+  DPR = Math.min(window.devicePixelRatio || 1, 2);
+  W = window.innerWidth; H = window.innerHeight;
+  cv.width = Math.floor(W * DPR); cv.height = Math.floor(H * DPR);
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+}
+window.addEventListener('resize', resize); resize();
+
+const ACCENTS = {
+  violet: [180,150,245], teal: [110,205,205], rose: [229,130,150],
+  warm:   [230,175,95],  ice: [143,190,245],
+};
+const NODES = 16;     // "lyric moments" dropped along the path
+
+const S = {
+  progress: 0, playing: false, dur: 180, motion: 0.5,
+  accent: ACCENTS.violet, seed: 7.3, t: 0, motes: [],
+};
+
+const lerp  = (a, b, t) => a + (b - a) * t;
+const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
+const bright = (c, k) => [clamp(c[0]+k,0,255), clamp(c[1]+k,0,255), clamp(c[2]+k,0,255)];
+const rgba  = (c, a) => `rgba(${c[0]|0},${c[1]|0},${c[2]|0},${a})`;
+
+// The path: a smooth left→right journey with seeded vertical undulation, so
+// every song is a different route but always reads as "across the frame".
+function pathY(t) {
+  const s = S.seed;
+  return H*0.5
+    + H*0.135 * Math.sin(t*Math.PI*2*1.1 + s*1.3)
+    + H*0.065 * Math.sin(t*Math.PI*2*2.3 + s*2.7)
+    + H*0.035 * Math.sin(t*Math.PI*2*3.9 + s*4.1);
+}
+const pathX = (t) => lerp(W*0.10, W*0.90, t);
+const pt = (t) => [pathX(t), pathY(t)];
+
+// ── input ───────────────────────────────────────────────────────────────
+const playBtn = document.getElementById('play');
+const seekEl = document.getElementById('seek'), seekV = document.getElementById('seekV');
+function setPlaying(on) { S.playing = on; playBtn.textContent = on ? '⏸ 暂停' : '▶ 播放'; playBtn.classList.toggle('on', on); }
+function syncSeek() { seekEl.value = Math.round(S.progress*1000); seekV.textContent = Math.round(S.progress*100)+'%'; }
+playBtn.onclick = () => { if (S.progress>=1) S.progress=0; setPlaying(!S.playing); };
+seekEl.oninput = () => { S.progress = +seekEl.value/1000; syncSeek(); };
+document.getElementById('next').onclick = () => newSong();
+function newSong() { S.seed = Math.random()*100; S.progress = 0; S.motes.length = 0; setPlaying(true); syncSeek(); }
+
+document.querySelectorAll('[data-dur]').forEach((b) => b.onclick = () => {
+  S.dur = +b.dataset.dur;
+  document.querySelectorAll('[data-dur]').forEach(x => x.classList.toggle('on', x === b));
+});
+const sw = document.getElementById('sw');
+sw.querySelectorAll('i').forEach((el) => el.onclick = () => {
+  S.accent = ACCENTS[el.dataset.c];
+  sw.querySelectorAll('i').forEach(x => x.classList.toggle('sel', x === el));
+});
+const motionEl = document.getElementById('motion'), motionV = document.getElementById('motionV');
+motionEl.oninput = () => { S.motion = +motionEl.value/100; motionV.textContent = motionEl.value; };
+
+const panel = document.getElementById('panel');
+window.addEventListener('keydown', (e) => {
+  if (e.code === 'Space') { e.preventDefault(); if (S.progress>=1) S.progress=0; setPlaying(!S.playing); }
+  else if (e.key === 'n' || e.key === 'N') newSong();
+  else if (e.key === 'h' || e.key === 'H') panel.classList.toggle('hidden');
+});
+
+// ── render loop ───────────────────────────────────────────────────────────
+let last = performance.now();
+function frame(now) {
+  const dt = Math.min(0.05, (now - last)/1000); last = now;
+  S.t += dt;
+  if (S.playing) {
+    S.progress += dt / S.dur;
+    if (S.progress >= 1) { S.progress = 1; setPlaying(false); }
+    syncSeek();
+  }
+  const p = S.progress, mo = 0.3 + S.motion*1.6;
+  const A = S.accent, headC = bright(A, 50);
+
+  ctx.clearRect(0, 0, W, H);
+  const STEP = 0.004;
+
+  // 1) Future — a faint dashed hairline of where the song will go.
+  ctx.save();
+  ctx.setLineDash([2, 7]); ctx.strokeStyle = 'rgba(200,205,230,0.10)'; ctx.lineWidth = 1.2;
+  ctx.beginPath();
+  for (let t = p; t <= 1.0001; t += STEP) { const [x,y]=pt(t); t===p?ctx.moveTo(x,y):ctx.lineTo(x,y); }
+  ctx.stroke(); ctx.restore();
+
+  // 2) Memory nodes — a soft dot at each passed "lyric moment".
+  for (let k = 1; k < NODES; k++) {
+    const tk = k/NODES; if (tk > p) break;
+    const [x,y] = pt(tk);
+    const tw = 0.6 + 0.4*Math.sin(S.t*1.4*mo + k);
+    ctx.fillStyle = rgba(A, 0.22*tw);
+    ctx.beginPath(); ctx.arc(x, y, 2.4, 0, Math.PI*2); ctx.fill();
+  }
+
+  // 3) Past — the drawn trail. A base "memory" stroke (whole past, low alpha)
+  //    plus a brighter recent segment near the head = a comet, not a wire.
+  if (p > 0.001) {
+    ctx.save();
+    ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    ctx.strokeStyle = rgba(A, 0.34); ctx.lineWidth = 2.4;
+    ctx.shadowColor = rgba(A, 0.5); ctx.shadowBlur = 14;
+    ctx.beginPath();
+    for (let t = 0; t <= p+1e-6; t += STEP) { const [x,y]=pt(t); t===0?ctx.moveTo(x,y):ctx.lineTo(x,y); }
+    ctx.stroke();
+    // recent (last ~9%) brighter + thicker
+    const recent = Math.max(0, p-0.09);
+    ctx.strokeStyle = rgba(headC, 0.8); ctx.lineWidth = 3.4; ctx.shadowBlur = 20;
+    ctx.beginPath();
+    for (let t = recent; t <= p+1e-6; t += STEP) { const [x,y]=pt(t); t===recent?ctx.moveTo(x,y):ctx.lineTo(x,y); }
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  // 4) Head — the glowing "now". Breathes; sheds slow motes so it lives even
+  //    when paused (and when idle with no song, it just hovers at the start).
+  const [hx, hy] = pt(p);
+  const breath = 1 + 0.12*Math.sin(S.t*2.0*mo);
+  const halo = ctx.createRadialGradient(hx, hy, 0, hx, hy, 46*breath);
+  halo.addColorStop(0, rgba(headC, 0.5)); halo.addColorStop(0.4, rgba(A, 0.18)); halo.addColorStop(1, rgba(A,0));
+  ctx.fillStyle = halo; ctx.fillRect(hx-50, hy-50, 100, 100);
+  ctx.save();
+  ctx.shadowColor = rgba(headC, 0.9); ctx.shadowBlur = 22;
+  ctx.fillStyle = rgba(bright(A,90), 0.95);
+  ctx.beginPath(); ctx.arc(hx, hy, 4.6*breath, 0, Math.PI*2); ctx.fill();
+  ctx.restore();
+
+  // motes off the head
+  if (S.motes.length < 26 && Math.sin(S.t*30) > 0.2) S.motes.push({ x:hx, y:hy, vx:(Math.random()-0.5)*16, vy:-8-Math.random()*14, life:0, max:1.4+Math.random() });
+  for (let i = S.motes.length-1; i >= 0; i--) {
+    const o = S.motes[i]; o.life += dt; const k = o.life/o.max;
+    if (k >= 1) { S.motes.splice(i,1); continue; }
+    o.x += o.vx*dt*mo; o.y += o.vy*dt*mo;
+    ctx.fillStyle = rgba(headC, (1-k)*0.5);
+    ctx.beginPath(); ctx.arc(o.x, o.y, 1.6*(1-k)+0.4, 0, Math.PI*2); ctx.fill();
+  }
+
+  requestAnimationFrame(frame);
+}
+syncSeek();
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

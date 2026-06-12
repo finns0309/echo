@@ -1,0 +1,676 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>echo · 夜行 原型</title>
+<!--
+  夜行 — 深夜列车的车窗。
+
+  质感路线:不用 DOM 搭景(会廉价),也不用 3D 模型(夜窗里几何不值钱)。
+  全场景一张 fragment shader,卖点全是光学:
+    · 散焦灯海    多层视差 bokeh,速度把光点拉成横向光痕
+    · 进站对焦    减速时焦点收拢,光斑缩成锐利的点 —— 世界只有停下才清晰
+    · 玻璃雨滴    雨滴折射背后的灯海(滴内强制合焦,微缩倒影)
+    · 车厢反射    玻璃上一层极淡的暖色顶灯倒影,偶尔闪一下
+  映射:rms→车速 / onset→曝光脉冲 / 间奏→隧道 / 换曲→进站(駅名標=歌名,
+  上一站=上一首,下一站=下一首) / 空闲→停在无人月台。
+-->
+<style>
+  :root { color-scheme: dark; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 100%; height: 100%; overflow: hidden; }
+  body {
+    background: #04050c;
+    font: 13px/1.5 -apple-system, "PingFang SC", "Hiragino Sans", system-ui, sans-serif;
+    color: #fff;
+  }
+  #gl { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+
+  /* 车窗边框 —— 内侧圆角阴影,让画面被"框"在玻璃里 */
+  #frame { position: fixed; inset: 0; z-index: 3; pointer-events: none; border-radius: 26px;
+    box-shadow:
+      inset 0 0 0 1px rgba(190,210,255,0.05),
+      inset 0 2px 30px rgba(0,0,0,0.85),
+      inset 0 0 120px rgba(0,0,0,0.55);
+  }
+  #vignette { position: fixed; inset: 0; z-index: 2; pointer-events: none;
+    background: radial-gradient(130% 115% at 50% 44%, transparent 55%, rgba(0,0,0,0.42) 100%); }
+  #grain { position: fixed; inset: 0; z-index: 4; pointer-events: none; opacity: 0.05;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"); }
+
+  /* 歌词 —— 映在玻璃上的反字虚影感:冷白 + 轻微重影 */
+  #lyric {
+    position: fixed; left: 7%; bottom: 9%; z-index: 5; max-width: 70%;
+    pointer-events: none;
+  }
+  #lyr-text {
+    font-size: clamp(22px, 3.2vw, 34px); font-weight: 300; letter-spacing: 3px;
+    color: rgba(228, 238, 255, 0.92);
+    text-shadow:
+      2px 1px 1px rgba(140,170,230,0.22),
+      0 0 18px rgba(160,190,255,0.28),
+      0 2px 10px rgba(0,0,0,0.7);
+    opacity: 0; transform: translateY(10px);
+    transition: opacity 900ms ease, transform 900ms cubic-bezier(0.22,1,0.36,1);
+  }
+  #lyr-text.show { opacity: 1; transform: translateY(0); }
+  #lyr-text .pulse { animation: lyrPulse 480ms ease-out; }
+  @keyframes lyrPulse {
+    0% { text-shadow: 2px 1px 1px rgba(140,170,230,0.22), 0 0 34px rgba(190,215,255,0.6), 0 2px 10px rgba(0,0,0,0.7); }
+    100% { text-shadow: 2px 1px 1px rgba(140,170,230,0.22), 0 0 18px rgba(160,190,255,0.28), 0 2px 10px rgba(0,0,0,0.7); }
+  }
+
+  /* 駅名標 —— 站名牌。进站时随减速滑入,白板绿带,上一站/下一站=上一首/下一首 */
+  #sign {
+    position: fixed; right: 9%; top: 22%; z-index: 6; width: 330px;
+    transform: translateX(calc(60vw + 400px));
+    filter: blur(6px);
+  }
+  #sign.arrive { transition: transform 3000ms cubic-bezier(0.13, 0.84, 0.22, 1), filter 2800ms ease;
+    transform: translateX(0); filter: blur(0); }
+  #sign.depart { transition: transform 1500ms cubic-bezier(0.65, 0, 0.85, 0.4), filter 1400ms ease;
+    transform: translateX(calc(-70vw - 400px)); filter: blur(7px); }
+  #sign .board {
+    background: linear-gradient(180deg, #f6f7f4 0%, #e9ebe6 100%);
+    border-radius: 10px; overflow: hidden;
+    box-shadow: 0 18px 50px -12px rgba(0,0,0,0.8), 0 2px 6px rgba(0,0,0,0.5),
+      inset 0 1px 0 rgba(255,255,255,0.9);
+  }
+  #sign .name {
+    text-align: center; padding: 22px 16px 6px;
+    font-size: 44px; font-weight: 800; letter-spacing: 10px; color: #16181c;
+    font-family: "PingFang SC", "Hiragino Sans", sans-serif;
+    text-indent: 10px; /* 抵消末字 letter-spacing,视觉居中 */
+  }
+  #sign .romaji {
+    text-align: center; font-size: 12px; letter-spacing: 5px; color: #5a5f66;
+    padding-bottom: 14px; text-indent: 5px;
+  }
+  #sign .band {
+    background: linear-gradient(180deg, #1d7a4d, #166040);
+    color: #f2f6f0; display: flex; justify-content: space-between; align-items: center;
+    padding: 8px 12px; font-size: 12.5px; letter-spacing: 1px;
+  }
+  #sign .band .dim { opacity: 0.85; }
+  #sign .posts { display: flex; justify-content: space-between; padding: 0 36px; height: 64px; }
+  #sign .posts i { width: 9px; height: 100%; border-radius: 0 0 3px 3px;
+    background: linear-gradient(180deg, #777d85, #3c4046 80%);
+    box-shadow: inset -2px 0 3px rgba(0,0,0,0.45); }
+
+  /* 控制面板(原型专用) */
+  #panel {
+    position: fixed; left: 18px; bottom: 18px; z-index: 10;
+    width: 280px; padding: 14px 16px 16px;
+    background: rgba(14,16,26,0.62); backdrop-filter: blur(20px) saturate(1.4);
+    -webkit-backdrop-filter: blur(20px) saturate(1.4);
+    border: 0.5px solid rgba(255,255,255,0.1); border-radius: 16px;
+    box-shadow: 0 18px 50px -20px rgba(0,0,0,0.7); user-select: none;
+    transition: opacity 240ms ease, transform 240ms ease;
+  }
+  #panel.hidden { opacity: 0; transform: translateY(8px); pointer-events: none; }
+  #panel h1 { font-size: 12px; font-weight: 600; letter-spacing: 0.3px; opacity: 0.9; margin-bottom: 2px; }
+  #panel .sub { font-size: 10.5px; opacity: 0.42; margin-bottom: 10px; line-height: 1.6; }
+  .row { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
+  .row label { width: 40px; font-size: 11px; opacity: 0.6; flex: none; }
+  .row input[type=range] { flex: 1; accent-color: #7fa8e8; height: 3px; }
+  .row .val { width: 34px; text-align: right; font-variant-numeric: tabular-nums; font-size: 10.5px; opacity: 0.55; }
+  .btns { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
+  button {
+    font: inherit; font-size: 11.5px; color: #fff; background: rgba(255,255,255,0.07);
+    border: 0.5px solid rgba(255,255,255,0.12); border-radius: 9px; padding: 6px 11px; cursor: pointer;
+    transition: background 140ms ease, transform 100ms ease;
+  }
+  button:hover { background: rgba(255,255,255,0.13); }
+  button:active { transform: scale(0.94); }
+  button.primary { background: rgba(127,168,232,0.26); border-color: rgba(127,168,232,0.45); }
+  button.on { background: rgba(255,176,84,0.22); border-color: rgba(255,176,84,0.4); }
+  .hint { margin-top: 12px; font-size: 10px; opacity: 0.34; line-height: 1.6; }
+  kbd { font: inherit; font-size: 9.5px; padding: 1px 4px; border-radius: 4px;
+    background: rgba(255,255,255,0.1); border: 0.5px solid rgba(255,255,255,0.14); }
+  #err { position: fixed; inset: auto 18px 18px auto; z-index: 99; max-width: 480px;
+    background: rgba(120,20,20,0.85); padding: 12px; border-radius: 10px;
+    font: 11px/1.5 Menlo, monospace; white-space: pre-wrap; display: none; }
+</style>
+</head>
+<body>
+<canvas id="gl"></canvas>
+<div id="vignette"></div>
+<div id="frame"></div>
+<div id="grain"></div>
+
+<div id="lyric"><div id="lyr-text"></div></div>
+
+<div id="sign">
+  <div class="board">
+    <div class="name" id="sg-name">灯河</div>
+    <div class="romaji" id="sg-romaji">DENG HE</div>
+    <div class="band">
+      <span class="dim" id="sg-prev">◀ —</span>
+      <span style="font-size:10.5px;opacity:.8">2 站台</span>
+      <span class="dim" id="sg-next">— ▶</span>
+    </div>
+  </div>
+  <div class="posts"><i></i><i></i></div>
+</div>
+
+<div id="panel">
+  <h1>echo · 夜行 原型</h1>
+  <div class="sub">车窗即世界 · rms→车速 · onset→曝光 · 间奏→隧道 · 换曲→进站停车(对焦)</div>
+  <div class="btns">
+    <button id="play" class="primary" style="flex:1">⏸ 暂停</button>
+    <button id="station">⏭ 进站换曲</button>
+  </div>
+  <div class="btns">
+    <button id="tunnel">◉ 隧道</button>
+    <button id="beat">♩ 节拍</button>
+  </div>
+  <div class="row"><label>能量</label><input id="energy" type="range" min="0" max="100" value="55"><span class="val" id="energyV">55</span></div>
+  <div class="row"><label>雨</label><input id="rain" type="range" min="0" max="100" value="62"><span class="val" id="rainV">62</span></div>
+  <div class="hint">真品里:能量=muse rms,节拍=onset 检测,间奏自动进隧道,换曲自动进站。<br><kbd>空格</kbd> 节拍 · <kbd>H</kbd> 隐藏面板</div>
+</div>
+<div id="err"></div>
+
+<script>
+'use strict';
+
+/* ───────────────────────── shader ───────────────────────── */
+
+const VERT = `
+attribute vec2 aPos;
+void main() { gl_Position = vec4(aPos, 0.0, 1.0); }
+`;
+
+const FRAG = `
+precision highp float;
+
+uniform vec2  u_res;
+uniform float u_time;
+uniform float u_speed;     // 0..1 当前车速
+uniform float u_scroll;    // CPU 积分的里程(速度的积分)
+uniform float u_focus;     // 0=全散焦 bokeh, 1=合焦(停站)
+uniform float u_tunnel;    // 0..1 隧道混合
+uniform float u_platform;  // 0..1 月台可见度
+uniform float u_rain;      // 0..1 玻璃雨滴量
+uniform float u_energy;    // rms
+uniform float u_onset;     // onset 衰减包络
+
+float h11(float n) { return fract(sin(n) * 43758.5453123); }
+float h21(vec2 p)  { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123); }
+
+/* ── 一层灯:沿 x 的哈希灯点,带视差/散焦/速度拖影 ─────────────── */
+vec3 lights(vec2 uv, float par, float spacing, float density,
+            float yBase, float ySpread, float baseR, float blurMul,
+            float blur, float gain, float coolP, float seed) {
+  float x = uv.x + u_scroll * par;
+  float stretch = 1.0 + u_speed * par * 5.5 * (0.3 + 0.7 * blur);
+  float id0 = floor(x / spacing);
+  vec3 acc = vec3(0.0);
+  for (int i = -1; i <= 1; i++) {
+    float id = id0 + float(i);
+    float rA = h11(id * 12.9898 + seed);
+    if (rA > density) continue;
+    float rB = h11(id * 78.233 + seed * 1.7);
+    float rC = h11(id * 37.719 + seed * 2.3);
+    float rD = h11(id * 93.989 + seed * 3.1);
+    float lx = (id + 0.5 + (rB - 0.5) * 0.85) * spacing;
+    float ly = yBase + (rC - 0.5) * ySpread;
+    float rad = baseR * (1.0 + blurMul * blur) * (0.6 + rD * 0.8);
+    float dx = (x - lx) / stretch;
+    float dy = uv.y - ly;
+    float r = length(vec2(dx, dy));
+    /* bokeh 圆斑:亮边圆盘 + 一点高斯晕;合焦时退化为锐点 */
+    float disc = smoothstep(rad, rad * 0.65, r);
+    float rim  = 0.55 + 0.45 * smoothstep(rad * 0.35, rad * 0.92, r);
+    float halo = exp(-(r * r) / (rad * rad * 5.0)) * 0.15;
+    float atten = clamp(baseR / rad, 0.22, 1.0);   /* 散焦摊薄亮度,圆斑保持有色不发白 */
+    float lum = (disc * rim + halo) * atten * gain * (0.25 + rD * rD * 1.2) / sqrt(stretch);
+    vec3 cWarm = vec3(1.0, 0.55, 0.18);   /* 钠灯 */
+    vec3 cCool = vec3(0.62, 0.78, 1.0);   /* 荧光 */
+    vec3 col = mix(cWarm, cCool, step(coolP, rB));
+    if (rD > 0.955)     col = vec3(1.0, 0.18, 0.22);   /* 信号红 */
+    else if (rD < 0.04) col = vec3(0.30, 1.0, 0.55);   /* 信号绿 */
+    lum *= 0.84 + 0.16 * sin(u_time * (1.0 + rC * 2.5) + rB * 43.0) * (0.4 + u_energy);
+    acc += col * lum;
+  }
+  return acc;
+}
+
+/* ── 远景天际线:楼体剪影限制在地平带内,点窗只是隐约的纹理 ───── */
+vec3 skyline(vec2 uv) {
+  float par = 0.05;
+  float x = uv.x + u_scroll * par;
+  float id = floor(x / 0.13);
+  float hA = h11(id * 5.13);
+  float top = -0.04 + hA * hA * 0.15;
+  vec3 col = vec3(0.0);
+  if (uv.y < top && uv.y > -0.115) {
+    float shade = 0.5 + 0.5 * h11(id * 3.3);
+    col = vec3(0.008, 0.012, 0.024) * shade;
+    vec2 wc = vec2(x / 0.011, uv.y / 0.0085);
+    float w = h21(floor(wc) + id * 0.37);
+    vec2 ws = fract(wc);
+    float wm = step(0.32, ws.x) * step(ws.x, 0.72) * step(0.3, ws.y) * step(ws.y, 0.7);
+    float lit = step(0.93, w);
+    col += vec3(1.0, 0.72, 0.38) * lit * wm * 0.10 * smoothstep(top, top - 0.06, uv.y);
+  }
+  return col;
+}
+
+/* ── 电杆:停车时是清晰的黑色立柱,高速时只剩一闪而过的残影 ───── */
+float poles(vec2 uv) {
+  float par = 1.3;
+  float x = uv.x + u_scroll * par;
+  float sp = 2.3;
+  float id = floor(x / sp);
+  float j = (h11(id * 9.7) - 0.5) * 0.7;
+  float px = (id + 0.5 + j) * sp;
+  float w = 0.010 * (1.0 + u_speed * 4.0);
+  float a = (1.0 - smoothstep(w * 0.35, w, abs(x - px))) / (1.0 + u_speed * 16.0);
+  return a * step(uv.y, 0.40) * 0.85;
+}
+
+/* ── 月台:荧光灯带 / 立柱 / 安全线,与近景同视差,随车一起停稳 ── */
+vec3 platformFx(vec2 uv) {
+  if (u_platform < 0.01) return vec3(0.0);
+  float par = 1.3;
+  float x = uv.x + u_scroll * par;
+  vec3 acc = vec3(0.0);
+  float fl = smoothstep(-0.14, -0.20, uv.y);          /* 月台地面区 */
+  acc += vec3(0.055, 0.066, 0.082) * fl;
+  /* 安全黄线 */
+  acc += vec3(0.85, 0.72, 0.22) * (1.0 - smoothstep(0.002, 0.009, abs(uv.y + 0.155))) * 0.65;
+  /* 荧光灯管:每 0.95 一段 */
+  float lid = floor(x / 0.95);
+  float lx = (lid + 0.5) * 0.95;
+  float seg = 1.0 - smoothstep(0.14, 0.21, abs(x - lx));
+  float lampY = 1.0 - smoothstep(0.0035, 0.011, abs(uv.y - 0.185));
+  float flick = 0.92 + 0.08 * step(0.3, h11(floor(u_time * 16.0) + lid));
+  acc += vec3(0.82, 0.90, 1.0) * seg * lampY * 1.9 * flick;
+  acc += vec3(0.45, 0.55, 0.72) * seg * exp(-abs(uv.y - 0.185) * 16.0) * 0.30;
+  /* 灯光在地面的光池 */
+  acc += vec3(0.16, 0.19, 0.24) * seg * fl * exp(-abs(uv.y + 0.28) * 5.0) * 0.9;
+  /* 立柱剪影 */
+  float pid = floor(x / 1.9 + 0.5);
+  float px = pid * 1.9;
+  float pw = 1.0 - smoothstep(0.020, 0.032, abs(x - px));
+  acc *= 1.0 - pw * 0.85 * step(uv.y, 0.18);
+  return acc * u_platform;
+}
+
+/* ── 隧道:吞掉世界,只剩钠灯按节奏掠过 + 混凝土壁的微光 ──────── */
+vec3 tunnelFx(vec2 uv) {
+  if (u_tunnel < 0.01) return vec3(0.0);
+  float par = 1.4;
+  float x = uv.x + u_scroll * par;
+  float sp = 1.25;
+  float id = floor(x / sp);
+  float lx = (id + 0.5) * sp;
+  float st = 1.0 + u_speed * par * 8.0;
+  float dx = (x - lx) / st;
+  float dy = uv.y - 0.26;
+  float l = exp(-(dx * dx + dy * dy) / 0.0011) * 1.5 / sqrt(st);
+  vec3 acc = vec3(1.0, 0.56, 0.20) * l;
+  /* 灯光擦过混凝土壁的纵向纹路 */
+  float wall = h21(vec2(floor(x * 6.0), floor(uv.y * 30.0)));
+  acc += vec3(0.42, 0.36, 0.30) * wall * 0.06 * exp(-abs(dx) * 3.0) * smoothstep(0.5, 0.1, abs(uv.y));
+  return acc * u_tunnel;
+}
+
+/* ── 场景(玻璃外的世界) ──────────────────────────────────── */
+vec3 scene(vec2 uv, float focus) {
+  float blur = 1.0 - focus;
+  /* 夜空:地平线一丝光污染 → 天顶近黑。夜要够黑,灯才值钱 */
+  float ty = clamp(uv.y * 1.5 + 0.35, 0.0, 1.0);
+  vec3 col = mix(vec3(0.014, 0.020, 0.040), vec3(0.002, 0.003, 0.008), ty);
+  col += vec3(0.045, 0.030, 0.055) * exp(-abs(uv.y + 0.02) * 9.0);
+  /* 星(很淡,城市夜空) */
+  vec2 sc = uv * 28.0;
+  float st = h21(floor(sc));
+  float stm = step(0.985, st) * smoothstep(0.4, 0.9, length(fract(sc) - 0.5) * -1.0 + 1.0);
+  col += vec3(0.5, 0.6, 0.8) * stm * 0.06 * (0.6 + 0.4 * sin(u_time * 0.8 + st * 50.0)) * step(0.12, uv.y);
+
+  col += skyline(uv);
+
+  float g = 1.0 + u_onset * 0.35 + u_energy * 0.2;
+  /* 远 → 近:远处密而小(城市的纹理),近处疏而大(bokeh 的主角) */
+  col += lights(uv, 0.10, 0.030, 0.55,  0.012, 0.070, 0.0016, 1.1, blur, 1.0 * g, 0.50, 1.0);
+  col += lights(uv, 0.16, 0.052, 0.50, -0.020, 0.080, 0.0024, 1.4, blur, 1.1 * g, 0.45, 7.0);
+  col += lights(uv, 0.42, 0.150, 0.38, -0.055, 0.110, 0.0060, 2.2, blur, 1.4 * g, 0.40, 13.0);
+  col += lights(uv, 0.95, 0.620, 0.16, -0.150, 0.180, 0.0130, 2.6, blur, 2.2 * g, 0.78, 29.0);
+
+  col += platformFx(uv);
+
+  /* 隧道把外界调暗 */
+  col *= 1.0 - u_tunnel * 0.94;
+  col += tunnelFx(uv);
+
+  /* 电杆(隧道里没有) */
+  col *= 1.0 - poles(uv) * (1.0 - u_tunnel) * 0.85;
+
+  return col;
+}
+
+/* ── 玻璃雨滴:返回 (折射法线 xy, 滴内掩码 z) ─────────────────── */
+vec3 dropField(vec2 suv, float t) {
+  vec3 res = vec3(0.0);
+  /* 下滑的水痕(稀疏,真正的存在感来自滴内倒立的微缩灯海) */
+  vec2 g = vec2(9.0, 1.6);
+  vec2 uv = suv * g;
+  float colH = h11(floor(uv.x) * 7.77);
+  uv.y += t * 0.10 * (0.5 + colH * 0.9) + colH * 9.0;
+  vec2 id = floor(uv);
+  float hp = h21(id);
+  float keep = step(1.0 - 0.62 * u_rain, hp);
+  vec2 stc = fract(uv) - 0.5;
+  float wig = sin(stc.y * 8.0 + hp * 40.0) * 0.07;
+  vec2 d = vec2(stc.x - (hp - 0.5) * 0.6 - wig, stc.y * (g.x / g.y) * 0.22);
+  float r = length(d);
+  float sz = 0.060 + hp * 0.040;
+  float drop = smoothstep(sz, sz * 0.55, r) * keep;
+  res.xy += d * drop * 1.6;
+  res.z = max(res.z, drop);
+  /* 静止微珠 */
+  vec2 g2 = vec2(24.0, 16.0);
+  vec2 uv2 = suv * g2 + 17.0;
+  vec2 id2 = floor(uv2);
+  float h = h21(id2);
+  vec2 st2 = fract(uv2) - 0.5;
+  vec2 c2 = (vec2(h21(id2 + 3.1), h21(id2 + 5.7)) - 0.5) * 0.5;
+  vec2 d2 = st2 - c2;
+  float rr = length(d2);
+  float sz2 = 0.045 + h * 0.075;
+  float keep2 = step(1.0 - 0.42 * u_rain, h);
+  float dr2 = smoothstep(sz2, sz2 * 0.6, rr) * keep2;
+  res.xy += d2 * dr2 * 0.9;
+  res.z = max(res.z, dr2 * 0.85);
+  return res;
+}
+
+/* ── 车厢内的反射:顶灯暖光,偶发 50Hz 闪 ─────────────────────── */
+vec3 interior(vec2 suv) {
+  vec2 p1 = vec2(0.27, 0.80), p2 = vec2(0.72, 0.86);
+  vec2 q1 = (suv - p1) * vec2(3.2, 11.0);
+  vec2 q2 = (suv - p2) * vec2(3.6, 12.0);
+  float e1 = exp(-dot(q1, q1));
+  float e2 = exp(-dot(q2, q2));
+  float buzz = step(0.94, h11(floor(u_time * 2.0)));
+  float flick = 1.0 - buzz * (0.5 + 0.5 * sin(u_time * 90.0)) * 0.5;
+  return vec3(1.0, 0.80, 0.55) * (e1 * 0.055 + e2 * 0.045) * flick;
+}
+
+void main() {
+  vec2 vUv = gl_FragCoord.xy / u_res;
+  float asp = u_res.x / u_res.y;
+  vec2 uv = (vUv - 0.5) * vec2(asp, 1.0);
+
+  /* 隧道里轻微的车体震动 */
+  uv.y += sin(u_time * 47.0) * 0.0014 * u_tunnel * u_speed;
+  uv.x += sin(u_time * 31.0 + 2.0) * 0.0010 * u_tunnel * u_speed;
+
+  /* 玻璃雨滴 → 折射 + 滴内合焦(雨滴是一颗颗倒挂的微缩镜头) */
+  vec3 dn = dropField(vUv, u_time);
+  vec2 ruv = uv + dn.xy * vec2(0.045, 0.075);
+  float focusLocal = max(u_focus, dn.z * 0.9);
+
+  vec3 col = scene(ruv, focusLocal);
+
+  /* 雨滴受光:很淡地拾一点环境亮度 */
+  col += vec3(0.05, 0.065, 0.10) * dn.z * (0.2 + u_energy * 0.25);
+
+  col += interior(vUv);
+
+  /* 调色:压高光 / 阴影偏青。不抬底 —— 夜就让它黑 */
+  col = col / (1.0 + col * 0.6);
+  col = pow(col, vec3(0.97, 1.0, 1.05));
+
+  gl_FragColor = vec4(col, 1.0);
+}
+`;
+
+/* ───────────────────────── GL boilerplate ───────────────────────── */
+
+const cv = document.getElementById('gl');
+const gl = cv.getContext('webgl', { antialias: false, alpha: false });
+const errBox = document.getElementById('err');
+
+function compile(type, src) {
+  const s = gl.createShader(type);
+  gl.shaderSource(s, src);
+  gl.compileShader(s);
+  if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) {
+    errBox.style.display = 'block';
+    errBox.textContent = 'shader error:\n' + gl.getShaderInfoLog(s);
+    throw new Error(gl.getShaderInfoLog(s));
+  }
+  return s;
+}
+const prog = gl.createProgram();
+gl.attachShader(prog, compile(gl.VERTEX_SHADER, VERT));
+gl.attachShader(prog, compile(gl.FRAGMENT_SHADER, FRAG));
+gl.linkProgram(prog);
+if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) {
+  errBox.style.display = 'block';
+  errBox.textContent = 'link error:\n' + gl.getProgramInfoLog(prog);
+}
+gl.useProgram(prog);
+const buf = gl.createBuffer();
+gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 3,-1, -1,3]), gl.STATIC_DRAW);
+const aPos = gl.getAttribLocation(prog, 'aPos');
+gl.enableVertexAttribArray(aPos);
+gl.vertexAttribPointer(aPos, 2, gl.FLOAT, false, 0, 0);
+
+const U = {};
+['u_res','u_time','u_speed','u_scroll','u_focus','u_tunnel','u_platform','u_rain','u_energy','u_onset']
+  .forEach(n => U[n] = gl.getUniformLocation(prog, n));
+
+function fit() {
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  cv.width = innerWidth * dpr; cv.height = innerHeight * dpr;
+  gl.viewport(0, 0, cv.width, cv.height);
+}
+window.addEventListener('resize', fit);
+fit();
+
+/* ───────────────────────── 曲目与歌词(模拟) ───────────────────────── */
+
+const TRACKS = [
+  { title: '灯河', romaji: 'DENG HE', lines: [
+    ['末班车碾过零点的道岔', 4.4],
+    ['城市退成一条发光的河', 4.6],
+    ['每盏灯都是没说出口的话', 4.6],
+    ['在玻璃上流过 又熄灭了', 5.0],
+    ['', 8.0],
+    ['隧道把世界按了静音', 4.4],
+    ['只剩心跳在轨缝里回声', 4.6],
+    ['雨贴着窗 学我不出声', 4.8],
+    ['远处谁家的灯 还亮着', 4.6],
+    ['像一封没有寄出的信', 5.0],
+    ['', 6.0],
+    ['下一站 天亮', 7.0],
+  ]},
+  { title: '白夜', romaji: 'BAI YE', lines: [
+    ['睡不着的城市陪我醒着', 4.6],
+    ['霓虹在水洼里换了班', 4.6],
+    ['', 7.0],
+    ['我数着灯 灯数着我', 4.8],
+    ['谁都没有数到尽头', 5.2],
+  ]},
+  { title: '南风路', romaji: 'NAN FENG LU', lines: [
+    ['风从站台的缝隙里来', 4.6],
+    ['带着白天剩下的温度', 4.8],
+    ['', 7.0],
+    ['旧站牌记得每一次告别', 5.0],
+    ['它只是从来不说', 5.4],
+  ]},
+];
+
+/* ───────────────────────── 状态机 ───────────────────────── */
+
+const st = {
+  playing: true,
+  mode: 'cruise',           // cruise | braking | stopped | depart
+  speed: 0.55, speedTarget: 0.6,
+  scroll: 0,
+  tunnel: 0, tunnelTarget: 0, tunnelHold: false,
+  platform: 0, platformTarget: 0,
+  energy: 0.55, rain: 0.62,
+  onset: 0,
+  track: 0, line: -1, lineT: 0,
+  nextBeat: 0,
+};
+
+const lyrEl = document.getElementById('lyr-text');
+const signEl = document.getElementById('sign');
+
+function cruiseSpeed() { return 0.42 + st.energy * 0.42; }
+
+function showLine(text) {
+  lyrEl.classList.remove('show');
+  if (!text) return;
+  setTimeout(() => { lyrEl.textContent = text; lyrEl.classList.add('show'); }, 350);
+}
+
+function advanceLine(dt) {
+  if (!st.playing || st.mode !== 'cruise') return;
+  st.lineT -= dt;
+  if (st.lineT > 0) return;
+  const lines = TRACKS[st.track].lines;
+  st.line = (st.line + 1) % lines.length;
+  const [text, dur] = lines[st.line];
+  st.lineT = dur;
+  showLine(text);
+  st.tunnelTarget = (text === '' && !st.tunnelHold) ? 1 : (st.tunnelHold ? 1 : 0);
+}
+
+/* 进站换曲:制动→月台浮现→停稳亮牌→停留→发车 */
+let stationBusy = false;
+function stationStop() {
+  if (stationBusy) return;
+  stationBusy = true;
+  st.mode = 'braking';
+  st.speedTarget = 0;
+  st.tunnelTarget = 0;
+  const next = (st.track + 1) % TRACKS.length;
+  const after = (next + 1) % TRACKS.length;
+  document.getElementById('sg-name').textContent = TRACKS[next].title;
+  document.getElementById('sg-romaji').textContent = TRACKS[next].romaji;
+  document.getElementById('sg-prev').textContent = '◀ ' + TRACKS[st.track].title;
+  document.getElementById('sg-next').textContent = TRACKS[after].title + ' ▶';
+  showLine('');
+  const checkSlow = setInterval(() => {
+    if (st.speed < 0.26) { st.platformTarget = 1; }
+    if (st.speed < 0.05) {
+      clearInterval(checkSlow);
+      signEl.classList.remove('depart');
+      signEl.classList.add('arrive');
+      st.mode = 'stopped';
+      setTimeout(depart, 4200);
+    }
+  }, 80);
+  function depart() {
+    st.track = next;
+    st.line = -1; st.lineT = 0.8;
+    st.mode = 'depart';
+    st.speedTarget = cruiseSpeed();
+    signEl.classList.remove('arrive');
+    signEl.classList.add('depart');
+    setTimeout(() => {
+      st.platformTarget = 0;
+      signEl.classList.remove('depart'); // 复位到屏外初始位
+      st.mode = 'cruise';
+      stationBusy = false;
+    }, 1600);
+  }
+}
+
+/* ───────────────────────── 控件 ───────────────────────── */
+
+const $ = id => document.getElementById(id);
+$('play').addEventListener('click', () => {
+  st.playing = !st.playing;
+  $('play').textContent = st.playing ? '⏸ 暂停' : '▶ 播放';
+  if (!st.playing) {            // 空闲态:停在无人月台
+    stationBusy = false;
+    st.mode = 'idle'; st.speedTarget = 0; st.tunnelTarget = 0;
+    showLine('');
+    setTimeout(() => { if (!st.playing) st.platformTarget = 1; }, 1200);
+  } else {
+    st.platformTarget = 0; st.mode = 'cruise'; st.speedTarget = cruiseSpeed();
+    st.line = -1; st.lineT = 1.2;
+  }
+});
+$('station').addEventListener('click', () => { if (st.playing) stationStop(); });
+$('tunnel').addEventListener('click', e => {
+  st.tunnelHold = !st.tunnelHold;
+  e.target.classList.toggle('on', st.tunnelHold);
+  st.tunnelTarget = st.tunnelHold ? 1 : 0;
+});
+function fireOnset(v) { st.onset = Math.min(1, Math.max(st.onset, v)); }
+$('beat').addEventListener('click', () => fireOnset(0.9));
+$('energy').addEventListener('input', e => {
+  st.energy = e.target.value / 100; $('energyV').textContent = e.target.value;
+  if (st.mode === 'cruise') st.speedTarget = cruiseSpeed();
+});
+$('rain').addEventListener('input', e => {
+  st.rain = e.target.value / 100; $('rainV').textContent = e.target.value;
+});
+window.addEventListener('keydown', e => {
+  if (e.code === 'Space') { e.preventDefault(); fireOnset(0.9); }
+  if (e.key === 'h' || e.key === 'H') $('panel').classList.toggle('hidden');
+});
+
+/* ───────────────────────── 主循环 ───────────────────────── */
+
+let lastT = performance.now();
+function tick(now) {
+  const dt = Math.min(0.05, (now - lastT) / 1000);
+  lastT = now;
+
+  /* 速度趋近(制动比加速狠) */
+  const k = st.speedTarget < st.speed ? 0.85 : 0.5;
+  st.speed += (st.speedTarget - st.speed) * (1 - Math.exp(-dt * k * 2.2));
+  st.scroll += st.speed * dt * 1.1;
+  if (st.scroll > 4000) st.scroll -= 4000;   /* 防 float 精度劣化(灯阵会换一批,可接受) */
+
+  st.tunnel += (st.tunnelTarget - st.tunnel) * (1 - Math.exp(-dt * 2.2));
+  st.platform += (st.platformTarget - st.platform) * (1 - Math.exp(-dt * 2.6));
+  st.onset *= Math.exp(-dt * 5.5);
+
+  /* 焦点:停下才看清世界 */
+  const focus = 1 - Math.min(1, Math.max(0, (st.speed - 0.02) / 0.4));
+
+  /* 节拍模拟(真品=muse onset) */
+  if (st.playing && now > st.nextBeat) {
+    fireOnset(0.45 + Math.random() * 0.45 * (0.5 + st.energy));
+    if (lyrEl.classList.contains('show')) {
+      lyrEl.classList.remove('pulse'); void lyrEl.offsetWidth; lyrEl.classList.add('pulse');
+    }
+    const bpm = 84 + st.energy * 72;
+    st.nextBeat = now + (60000 / bpm) * (0.75 + Math.random() * 0.5);
+  }
+
+  advanceLine(dt);
+
+  gl.uniform2f(U.u_res, cv.width, cv.height);
+  gl.uniform1f(U.u_time, now / 1000);
+  gl.uniform1f(U.u_speed, st.speed);
+  gl.uniform1f(U.u_scroll, st.scroll);
+  gl.uniform1f(U.u_focus, focus);
+  gl.uniform1f(U.u_tunnel, st.tunnel);
+  gl.uniform1f(U.u_platform, st.platform);
+  gl.uniform1f(U.u_rain, st.rain);
+  gl.uniform1f(U.u_energy, st.energy * (st.playing ? 1 : 0.15));
+  gl.uniform1f(U.u_onset, st.onset);
+  gl.drawArrays(gl.TRIANGLES, 0, 3);
+
+  requestAnimationFrame(tick);
+}
+requestAnimationFrame(tick);
+
+/* 开场:第一句 */
+st.lineT = 1.0;
+</script>
+</body>
+</html>

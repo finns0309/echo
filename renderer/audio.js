@@ -1,11 +1,11 @@
-// Spectrum + onset engine — dormant infrastructure.
+// Spectrum + onset engine.
 //
 // Receives muse's /spectrum WS (24-band + RMS, ~30fps), caches the latest
-// frame, and runs a spectral-flux onset detector. No current theme consumes it
-// — it's kept live and ready so a future audio-reactive theme can register an
-// onset handler via FL_AUDIO.onOnset(cb) without re-deriving the detector.
-// (The piano-key strip / solo visualizer that used to live here were removed
-// with their themes; the reusable signal source is what's worth keeping.)
+// frame, and runs a spectral-flux onset detector. Consumers: furin (rms →
+// wind, onsets → clapper kicks), roam (rms → director energy, onsets → stage
+// glow), eva (rms → sync%, onsets → A.T. field, centroid → pattern). Any
+// future audio-reactive theme registers the same way via FL_AUDIO.onOnset(cb)
+// / FL_AUDIO.getFrame(), without re-deriving the detector.
 //
 // Protocol: ./NOW_PLAYING.md §Spectrum channel. Diagnostics: window.__piano.
 //

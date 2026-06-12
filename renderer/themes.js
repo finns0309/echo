@@ -2,15 +2,24 @@
 // renderer (apply-theme dispatch).
 //
 // A theme is a composition of components:
-//   layout: 'stage' | 'single' | 'conversation' | 'danmaku'
+//   layout: 'stage' | 'single' | 'conversation' | 'danmaku' | 'furin' | 'roam'
 //     - stage:        floating cards at center, one per line. Per-char reveal.
 //     - single:       only the current line, huge and centered.
 //     - conversation: chat-bubble stream (imsg).
 //     - danmaku:      fullscreen right→left barrage.
+//     - furin:        hanging wind-chime ornament; lyric on the paper strip.
+//     - ticket:       collectible holo concert ticket; lyric foil-stamped on
+//                     the card, torn stubs pile into tonight's setlist.
+//     - roam:         desktop-wide kinetic typography; a director stages each
+//                     line somewhere on screen with its own choreography.
+//     - eva:          NERV-terminal title cards; lyrics as hard-cut Mincho
+//                     intertitles + live analysis chrome.
+//     - shinkai:      time-of-day sky (light/clouds/wires); lyric lower third.
+//     - idol:         star stage (penlight sea, spotlights, ★ glints).
 //   reveal: 'wave' | 'typewriter' | 'ink' | 'none'
 //     Per-char entrance animation. Only meaningful for layout=stage.
 //   fx:     'plasma' | undefined  (optional GPU shader layer, renderer/fx.js)
-//   window: 'headline' | 'subtitle-strip' | 'ambient' | 'overlay' | 'card'
+//   window: 'headline' | 'subtitle-strip' | 'ambient' | 'overlay' | 'card' | 'hanging' | 'tall-card'
 //     Mode of consumption → window bounds + click-through (resolved in main.js).
 //   tokens: map of CSS custom properties applied to <body> (see style.css §TOKENS).
 //   customClass: optional, adds `theme-<name>` to body for the few themes that
@@ -19,9 +28,11 @@
 // Adding a new theme: copy an entry, change name/label, tweak tokens. Only add a
 // `body.theme-<name>` block + customClass: true if tokens can't express it.
 //
-// NOTE: the spectrum/onset engine (renderer/audio.js) is kept as dormant
-// infrastructure — no current theme consumes it. A future audio-reactive theme
-// re-wires its onset handler there; see audio.js.
+// NOTE: the spectrum/onset engine (renderer/audio.js) now has consumers:
+// furin (rms → wind, onsets → clapper kicks), roam (rms → director energy,
+// onsets → stage glow), eva (onsets → A.T. field), ticket (rms → handling
+// energy, onsets → tilt kicks, centroid → diffraction hue). Register more
+// via FL_AUDIO.onOnset / getFrame.
 
 // IIFE-wrapped so internal names (THEMES, etc.) don't leak to the shared
 // global scope. Plain <script> tags all share one global scope, and app.js
@@ -251,6 +262,142 @@ const THEMES = [
       '--fl-chrome-bg':     'rgba(0,0,0,0.42)',
       '--fl-chrome-fg':     '#fff',
       '--fl-chrome-border': 'rgba(255,255,255,0.14)',
+    },
+  },
+
+  // ---------- roam · desktop-wide kinetic typography / 漫游 ----------
+  // The danmaku idea generalized: fullscreen transparent + click-through, but
+  // lines are staged anywhere by a director (renderer/roam.js) — quiet lines
+  // drift in corners, phrase openings traverse the whole desktop, hot lines
+  // bloom from the center, repeated lines replay their exact staging so the
+  // chorus visually rhymes. Best fullscreen with click-through on.
+  {
+    name: 'roam', label: '漫游', window: 'overlay',
+    layout: 'roam', reveal: 'none',
+    customClass: true, // transparent body, like danmaku
+    tokens: {
+      '--fl-bg-color':     'transparent',
+      '--fl-bg-image':     'none',
+      '--fl-tint-image':   'none',
+      '--fl-text-color':   '#ffffff',
+      '--fl-text-weight':  '800',
+      '--fl-letter-spacing':'0.4px',
+      // Same readable-anywhere trick as danmaku: layered shadow + thin stroke.
+      '--fl-text-shadow': `
+        0 2px 4px  rgba(0,0,0,0.95),
+        0 0 12px   rgba(0,0,0,0.7),
+        0 0 28px   rgba(0,0,0,0.45)`,
+      '--fl-text-stroke': '0.6px rgba(0,0,0,0.6)',
+      '--fl-chrome-bg':     'rgba(0,0,0,0.42)',
+      '--fl-chrome-fg':     '#fff',
+      '--fl-chrome-border': 'rgba(255,255,255,0.14)',
+    },
+  },
+
+  // ---------- shinkai · the sky as protagonist / 云隙 ----------
+  // Case study in Makoto Shinkai's grammar: a time-of-day sky (real clock —
+  // dawn/day/magic-hour/night palettes), sun with bloom + crepuscular rays,
+  // baked cumulus, telephone-wire silhouettes with perched birds. Night
+  // onsets earn shooting stars. Lyric sits small in the lower third.
+  {
+    name: 'shinkai', label: '云隙', window: 'ambient',
+    layout: 'shinkai', reveal: 'none',
+    customClass: true,
+    tokens: {
+      '--fl-bg-color':     '#101a3e',
+      '--fl-bg-image':     'none',
+      '--fl-tint-image':   'none',
+      '--fl-text-color':   '#ffffff',
+      '--fl-chrome-bg':     'rgba(16, 22, 48, 0.5)',
+      '--fl-chrome-fg':     '#eaf2ff',
+      '--fl-chrome-border': 'rgba(255, 255, 255, 0.18)',
+      '--fl-chrome-artist': 'rgba(234, 242, 255, 0.6)',
+    },
+  },
+
+  // ---------- idol · the star in the eye / 星瞳 ----------
+  // Case study in Oshi no Ko's grammar: penlight sea that phase-locks as the
+  // song surges (bright/dark duality on one energy axis), sweeping
+  // spotlights, purple→pink six-point star glints on onsets, one lyric
+  // character crowned with the eye-star. Idle = ghost light on an empty stage.
+  {
+    name: 'idol', label: '星瞳', window: 'ambient',
+    layout: 'idol', reveal: 'none',
+    customClass: true,
+    tokens: {
+      '--fl-bg-color':     '#0e0a18',
+      '--fl-bg-image':     'none',
+      '--fl-tint-image':   'none',
+      '--fl-text-color':   '#ffffff',
+      '--fl-chrome-bg':     'rgba(20, 12, 30, 0.55)',
+      '--fl-chrome-fg':     '#ff9fc6',
+      '--fl-chrome-border': 'rgba(255, 95, 162, 0.3)',
+      '--fl-chrome-artist': 'rgba(255, 240, 250, 0.6)',
+    },
+  },
+
+  // ---------- eva · NERV-terminal title cards / 新世纪 ----------
+  // Case study in a specified art direction: lyrics as 次回予告-style Mincho
+  // intertitles on a bare black void (hard cuts, no easing); A.T.-field
+  // hexagons ripple out on onsets and a lock-on sequence runs on track
+  // change. renderer/eva.js.
+  {
+    name: 'eva', label: '新世纪', window: 'ambient',
+    layout: 'eva', reveal: 'none',
+    customClass: true,
+    tokens: {
+      '--fl-bg-color':     '#050505',
+      '--fl-bg-image':     'none',
+      '--fl-tint-image':   'none',
+      '--fl-text-color':   '#f2f0e8',
+      '--fl-chrome-bg':     'rgba(12, 9, 6, 0.6)',
+      '--fl-chrome-fg':     '#ff6a00',
+      '--fl-chrome-border': 'rgba(255, 106, 0, 0.28)',
+      '--fl-chrome-artist': 'rgba(242, 240, 232, 0.5)',
+    },
+  },
+
+  // ---------- furin · hanging glass wind-chime / 风铃 ----------
+  // A desktop object, not a panel: an Edo-glass bell on a transparent strip
+  // of window, lyric brushed vertically on the paper tanzaku. Breeze keeps it
+  // alive when idle; muse's spectrum turns the song itself into the wind
+  // (first consumer of the dormant FL_AUDIO engine).
+  {
+    name: 'furin', label: '风铃', window: 'hanging',
+    layout: 'furin', reveal: 'none',
+    customClass: true,
+    tokens: {
+      '--fl-bg-color':     'transparent',
+      '--fl-bg-image':     'none',
+      '--fl-tint-image':   'none',
+      '--fl-text-color':   '#3a2f22',
+      '--fl-chrome-bg':     'rgba(24, 18, 12, 0.42)',
+      '--fl-chrome-fg':     '#fff',
+      '--fl-chrome-border': 'rgba(255, 255, 255, 0.14)',
+      '--fl-chrome-artist': 'rgba(255, 255, 255, 0.6)',
+    },
+  },
+
+  // ---------- ticket · hologram concert ticket / 镭射票 ----------
+  // A collectible K-pop laser ticket floats as a desktop object: song title
+  // is the billing, the lyric is foil-stamped security print, stub + barcode
+  // below. Audio handles the card, the foil answers — onsets tilt it (the
+  // sheen sweep is caused by the turn), rms is handling energy, the spectral
+  // centroid bends the diffraction hue. Song change tears the stub onto
+  // tonight's setlist pile; stop chops a 散场 seal on the face.
+  {
+    name: 'ticket', label: '镭射票', window: 'tall-card',
+    layout: 'ticket', reveal: 'none',
+    customClass: true,
+    tokens: {
+      '--fl-bg-color':     'transparent',
+      '--fl-bg-image':     'none',
+      '--fl-tint-image':   'none',
+      '--fl-text-color':   '#f2f6ff',
+      '--fl-chrome-bg':     'rgba(16, 12, 34, 0.5)',
+      '--fl-chrome-fg':     '#fff',
+      '--fl-chrome-border': 'rgba(255, 255, 255, 0.14)',
+      '--fl-chrome-artist': 'rgba(255, 255, 255, 0.6)',
     },
   },
 

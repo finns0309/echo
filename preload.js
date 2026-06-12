@@ -2,6 +2,8 @@ const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('api', {
   nowPlaying: () => ipcRenderer.invoke('now-playing'),
+  // 选词导演：整首歌词 → main（Bedrock LLM + 磁盘缓存）→ {行文本: 强调词} | null
+  director: (payload) => ipcRenderer.invoke('director', payload),
   toggleClickThrough: () => ipcRenderer.invoke('toggle-click-through'),
   setIgnoreMouseEvents: (ignore) => ipcRenderer.invoke('set-ignore-mouse-events', ignore),
   // Per-theme window profile. Returns the resulting clickThrough state so

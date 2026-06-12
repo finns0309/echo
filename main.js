@@ -2,6 +2,7 @@ const { app, BrowserWindow, ipcMain, screen, Menu, Tray, nativeImage } = require
 const path = require('path');
 
 const TRAY_THEMES = require('./renderer/themes.js');
+const director = require('./director.js');
 
 let win;
 let tray;
@@ -109,6 +110,10 @@ async function runNowPlaying() {
 
 ipcMain.handle('now-playing', () => runNowPlaying());
 
+// 选词导演：renderer 把整首歌词交来，这里查缓存或调 Bedrock（director.js）。
+// 返回 行文本→强调词 映射；任何失败返回 null（renderer 用启发式兜底）。
+ipcMain.handle('director', (_, payload) => director.direct(payload));
+
 ipcMain.handle('toggle-click-through', () => {
   clickThrough = !clickThrough;
   win.setIgnoreMouseEvents(clickThrough, { forward: true });
@@ -134,6 +139,10 @@ function resolveWindowProfile(name) {
       return { width: wa.width, height: 120, x: wa.x, y: wa.y + wa.height - 140, clickThrough: true };
     case 'card':     // 380×520 右悬 — imsg/duet conversation
       return { width: 380, height: 520, x: wa.x + wa.width - 400, y: wa.y + 60, clickThrough: false };
+    case 'hanging':  // 300×470 顶部右侧垂挂 — furin 风铃 (cord hangs from the window top edge)
+      return { width: 300, height: 470, x: wa.x + wa.width - 330, y: wa.y, clickThrough: false };
+    case 'tall-card': // 380×720 右侧竖卡 — ticket 镭射票 (vertical holo ticket + stub pile)
+      return { width: 380, height: 720, x: wa.x + wa.width - 396, y: wa.y + Math.max(0, Math.round((wa.height - 720) * 0.6)), clickThrough: false };
     case 'ambient':  // 全屏背景 — plasma/ripple/sakura/storm/instrumental, NOT click-through
       return { width: wa.width, height: wa.height, x: wa.x, y: wa.y, clickThrough: false };
     case 'overlay':  // 全屏覆盖 — danmaku, click-through ON
@@ -261,6 +270,7 @@ ipcMain.on('theme-changed', (_, name) => {
 });
 
 app.whenReady().then(() => {
+  director.init(app.getPath('userData'));
   createWindow();
   createTray();
   if (process.platform === 'darwin') app.dock?.hide();

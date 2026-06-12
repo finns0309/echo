@@ -136,6 +136,49 @@ function renderAt(t) {
     return;
   }
 
+  if (document.body.dataset.layout === 'furin') {
+    // Between lines (cur=null) the paper keeps the previous line — a strip of
+    // paper holding the last sung phrase is natural; blanking it would strobe.
+    if (cur) FL_FURIN.setLine(cur);
+    return;
+  }
+
+  if (document.body.dataset.layout === 'ticket') {
+    // A printed ticket never blanks between lines; new lines re-stamp the foil.
+    if (cur) FL_TICKET.setLine(cur);
+    return;
+  }
+
+  if (document.body.dataset.layout === 'roam') {
+    // The director wants the line's sung duration and the silence before it
+    // (LRC start-time deltas) to cast its choreography.
+    if (cur) {
+      FL_ROAM.spawn(cur, {
+        dur: nxt ? nxt.time - cur.time : 6,
+        gap: prv ? cur.time - prv.time : 99,
+        index: i,
+      });
+    }
+    return;
+  }
+
+  if (document.body.dataset.layout === 'eva') {
+    // Hard-cut title cards: between lines the previous card holds (an
+    // intertitle never shows an empty frame).
+    if (cur) FL_EVA.setLine(cur);
+    return;
+  }
+
+  if (document.body.dataset.layout === 'shinkai') {
+    if (cur) FL_SHINKAI.setLine(cur);
+    return;
+  }
+
+  if (document.body.dataset.layout === 'idol') {
+    if (cur) FL_IDOL.setLine(cur);
+    return;
+  }
+
   if (usesStage()) {
     // Stage themes split the line into per-codepoint spans for the reveal
     // stagger; pass the line (or '♪' as the between-lines placeholder).
@@ -224,6 +267,17 @@ async function applyAccentFromCover(url) {
 
 // Commit a fully-loaded track to the UI all at once.
 function commitTrack(np, lines, cover, elapsed, rate) {
+  // New song, new show: reset roam's per-song director memory (chorus-rhyme
+  // cache, region recency, wind heading). Harmless when roam is hidden.
+  FL_ROAM.clear();
+  // Feed eva the new target (title/artist/cover/duration). When the eva
+  // layout is live this fires its warning → lock-on sequence; otherwise it
+  // just caches the track for whenever the theme is activated.
+  FL_EVA.setTrack(np);
+  // idol: a penlight wave rolls across the sea to greet the new song.
+  FL_IDOL.setTrack(np);
+  // ticket: tear the old stub onto tonight's pile, deal the new ticket in.
+  FL_TICKET.setTrack(np);
   titleEl.textContent = np.title;
   artistEl.textContent = np.artist ? ' · ' + np.artist : '';
   if (cover) {
@@ -245,6 +299,22 @@ function commitTrack(np, lines, cover, elapsed, rate) {
     if (usesStage()) {
       stageEl.innerHTML = '';
       renderStage(np.title);
+    } else if (document.body.dataset.layout === 'furin') {
+      // No lyrics (instrumental) — the tanzaku carries the title, like a label.
+      FL_FURIN.setLine({ text: np.title });
+    } else if (document.body.dataset.layout === 'ticket') {
+      // Instrumental: the title itself gets the foil stamp.
+      FL_TICKET.setLine({ text: np.title });
+    } else if (document.body.dataset.layout === 'roam') {
+      // No lyrics — the title makes one slow crossing, then the stage rests.
+      FL_ROAM.spawn({ text: np.title }, { dur: 9, gap: 99, index: 0 });
+    } else if (document.body.dataset.layout === 'eva') {
+      // Instrumental: the title itself becomes the intertitle.
+      FL_EVA.setLine({ text: np.title });
+    } else if (document.body.dataset.layout === 'shinkai') {
+      FL_SHINKAI.setLine({ text: np.title });
+    } else if (document.body.dataset.layout === 'idol') {
+      FL_IDOL.setLine({ text: np.title });
     } else {
       prevEl.textContent = '';
       currEl.textContent = np.title;
@@ -285,6 +355,25 @@ async function pollNowPlaying() {
         // Same: drop the bubble stream so it doesn't read as a live chat.
         const cs = document.querySelector('#convo .cv-stream');
         if (cs) cs.innerHTML = '';
+      } else if (document.body.dataset.layout === 'furin') {
+        // Flip the paper back to blank — the bare chime keeps swaying as a
+        // pure ornament while nothing plays.
+        FL_FURIN.clear();
+      } else if (document.body.dataset.layout === 'ticket') {
+        // Chop the 散场 seal — the billing stays, the show is over.
+        FL_TICKET.clear();
+      } else if (document.body.dataset.layout === 'roam') {
+        // Strike the stage — leftover staged lines read as live otherwise.
+        FL_ROAM.clear();
+      } else if (document.body.dataset.layout === 'eva') {
+        // Back to the standby terminal (待機 card, instruments keep running).
+        FL_EVA.clear();
+      } else if (document.body.dataset.layout === 'shinkai') {
+        // The sky stays — only the words leave.
+        FL_SHINKAI.clear();
+      } else if (document.body.dataset.layout === 'idol') {
+        // House lights down; the ghost light takes the stage.
+        FL_IDOL.clear();
       }
       state.trackKey = '';
       state.lines = [];
@@ -343,6 +432,15 @@ async function pollNowPlaying() {
   // poll doesn't spuriously trip the "discontinuity" branch.
   if (typeof np.stateVersion === 'number') state.stateVersion = np.stateVersion;
   state.isLoading = false;
+
+  // 选词导演：整首歌词一次性交给主进程（Bedrock LLM + 按歌词哈希的磁盘
+  // 缓存），结果回来后 FL_TEXT.pickKeyword 查表升级之后的行。纯增强路径：
+  // 缓存命中近乎即时；首听期间唱到的行先用启发式；失败只是维持现状。
+  if (lines.length && window.api.director) {
+    window.api.director({ title: np.title, artist: np.artist, lines: lines.map((l) => l.text) })
+      .then((map) => { if (map) FL_TEXT.setDirections(map); })
+      .catch(() => {});
+  }
 }
 
 function tick() {
@@ -351,6 +449,12 @@ function tick() {
   renderAt(t);
   FL_CONVO.applyGap(t);
   FL_AUDIO.frame();
+  FL_FURIN.frame();
+  FL_TICKET.frame();
+  FL_ROAM.frame();
+  FL_EVA.frame();
+  FL_SHINKAI.frame();
+  FL_IDOL.frame();
   requestAnimationFrame(tick);
 }
 
@@ -439,6 +543,11 @@ function applyTheme(name) {
 
   // 4b) Theme-specific DOM prep.
   if (theme.layout === 'conversation') { FL_CONVO.build(); FL_CONVO.refreshHeader(); }
+  if (theme.layout === 'furin') FL_FURIN.start(); else FL_FURIN.stop();
+  if (theme.layout === 'ticket') FL_TICKET.start(); else FL_TICKET.stop();
+  if (theme.layout === 'eva') FL_EVA.start(); else FL_EVA.stop();
+  if (theme.layout === 'shinkai') FL_SHINKAI.start(); else FL_SHINKAI.stop();
+  if (theme.layout === 'idol') FL_IDOL.start(); else FL_IDOL.stop();
 
   // Persistence is split: the *default* theme (manual pick) is saved by
   // setAndReportTheme(); auto-switch-driven applies do NOT overwrite it.
@@ -469,6 +578,10 @@ function applyTheme(name) {
   // session look like phantom messages when the user comes back.
   const cvStream = document.querySelector('#convo .cv-stream');
   if (cvStream) cvStream.innerHTML = '';
+  // And the roam stage (keep its director memory — switching back mid-song
+  // should still rhyme the chorus).
+  const rmEl = document.getElementById('roam');
+  if (rmEl) rmEl.innerHTML = '';
   state.lastIdx = -2;
   if (usesStage() && !state.lines.length) {
     renderStage(currEl.textContent || '等待播放…');

@@ -1,0 +1,573 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<title>echo · 口味试吃 — 六种"那个感觉"</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body {
+    background:
+      radial-gradient(ellipse 90% 60% at 70% -10%, #1c2240 0%, transparent 60%),
+      radial-gradient(ellipse 70% 50% at 10% 110%, #251d38 0%, transparent 55%),
+      #0b0d18;
+    color: #e8e6f0;
+    font-family: "SF Pro Display", -apple-system, "PingFang SC", sans-serif;
+    min-height: 100%;
+  }
+  header { max-width: 1460px; margin: 0 auto; padding: 44px 30px 8px; }
+  header h1 { font-size: 22px; font-weight: 700; letter-spacing: 1px; }
+  header p { margin-top: 8px; font-size: 13px; color: rgba(232,230,240,.55); line-height: 1.7; }
+  .grid {
+    max-width: 1460px; margin: 26px auto 60px; padding: 0 30px;
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(420px, 1fr)); gap: 24px;
+  }
+  .card {
+    position: relative; height: 380px;
+    border-radius: 18px; overflow: hidden;
+    border: 0.5px solid rgba(255,255,255,.09);
+    box-shadow: 0 30px 60px -30px rgba(0,0,0,.6), 0 1px 0 rgba(255,255,255,.05) inset;
+  }
+  .card canvas, .card svg.stage { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .label {
+    position: absolute; left: 14px; right: 14px; bottom: 12px; z-index: 5;
+    display: flex; flex-direction: column; gap: 6px;
+    padding: 10px 14px; border-radius: 12px;
+    background: rgba(10, 12, 24, 0.55);
+    backdrop-filter: blur(14px) saturate(1.3);
+    -webkit-backdrop-filter: blur(14px) saturate(1.3);
+    border: 0.5px solid rgba(255,255,255,.08);
+  }
+  .label .row { display: flex; align-items: baseline; gap: 10px; }
+  .label b { font-size: 14.5px; letter-spacing: .5px; }
+  .chips { display: flex; gap: 5px; }
+  .chips span {
+    font-size: 10px; padding: 2px 7px; border-radius: 99px;
+    background: rgba(255,255,255,.08); color: rgba(232,230,240,.75);
+    border: 0.5px solid rgba(255,255,255,.07);
+  }
+  .lineage { font-size: 11px; color: rgba(232,230,240,.45); line-height: 1.5; }
+  /* per-card ambient tints so six cards don't read as one wall */
+  #card-bubble   { background: linear-gradient(170deg, #131a2e, #0e1322 70%); }
+  #card-dust     { background: linear-gradient(160deg, #14182b, #1d1626 80%); }
+  #card-crystal  { background: linear-gradient(165deg, #16182e, #101325 75%); }
+  #card-wisp     { background: linear-gradient(170deg, #0e1626, #101c2b 80%); }
+  #card-mobile   { background: linear-gradient(168deg, #181a2c, #121426 75%); }
+  #card-vial     { background: linear-gradient(166deg, #141a2c, #161225 80%); }
+</style>
+</head>
+<body>
+<header>
+  <h1>echo · 口味试吃 — 六种"那个感觉"</h1>
+  <p>你给的词:灵动 / 轻盈 / 优雅 / 摆件 / 挂饰 / 泡泡 / 梦幻 / 二次元的某种风格。<br>
+  下面是六种不同血统的解读,全是会自己活着的小样(不是成品)。指给我看哪个最接近你心里那个感觉——也可以说"3 的材质 + 4 的性格"这种组合。</p>
+</header>
+
+<div class="grid">
+
+  <div class="card" id="card-bubble">
+    <canvas id="cv-bubble"></canvas>
+    <div class="label">
+      <div class="row"><b>① 泡泡 · 薄膜虹彩</b>
+        <div class="chips"><span>泡泡</span><span>轻盈</span><span>梦幻</span></div></div>
+      <div class="lineage">血统:汽水广告 / 《Bubble》的肥皂膜光学 — 会呼吸、偶尔破掉再长回来。歌词可以住在泡泡里。</div>
+    </div>
+  </div>
+
+  <div class="card" id="card-dust">
+    <canvas id="cv-dust"></canvas>
+    <div class="label">
+      <div class="row"><b>② 光尘 · 空气里的光</b>
+        <div class="chips"><span>梦幻</span><span>二次元的光</span></div></div>
+      <div class="lineage">血统:新海诚的空气感 — 光斑、丁达尔、每一粒自己闪。歌词可以从聚拢的光尘里凝出来。</div>
+    </div>
+  </div>
+
+  <div class="card" id="card-crystal">
+    <svg class="stage" id="sv-crystal" viewBox="0 0 440 380"></svg>
+    <div class="label">
+      <div class="row"><b>③ 水晶吊坠 · 切面与闪光</b>
+        <div class="chips"><span>挂饰</span><span>优雅</span></div></div>
+      <div class="lineage">血统:魔法少女的首饰盒(只留宝石不留角色)— 切面流光、偶尔一次星闪。风铃的远房贵族表姐。</div>
+    </div>
+  </div>
+
+  <div class="card" id="card-wisp">
+    <canvas id="cv-wisp"></canvas>
+    <div class="label">
+      <div class="row"><b>④ 灵 · 桌面上住了个小东西</b>
+        <div class="chips"><span>灵动</span><span>梦幻</span></div></div>
+      <div class="lineage">血统:吉卜力的"附近有什么活着"(煤煤虫的抽象远亲)— 慢慢游,偶尔窜一下。它可以衔着歌词游过去。</div>
+    </div>
+  </div>
+
+  <div class="card" id="card-mobile">
+    <svg class="stage" id="sv-mobile" viewBox="0 0 440 380"></svg>
+    <div class="label">
+      <div class="row"><b>⑤ 风动雕塑 · 平衡的慢</b>
+        <div class="chips"><span>摆件</span><span>优雅</span><span>轻盈</span></div></div>
+      <div class="lineage">血统:Calder mobile × 无印良品 — 设计师货架那一侧的安静,全靠平衡和缓慢。月亮换成歌词牌就是主题。</div>
+    </div>
+  </div>
+
+  <div class="card" id="card-vial">
+    <canvas id="cv-vial"></canvas>
+    <div class="label">
+      <div class="row"><b>⑥ 星屑瓶 · 装在玻璃里的歌</b>
+        <div class="chips"><span>挂饰</span><span>梦幻</span><span>泡泡(玻璃)</span></div></div>
+      <div class="lineage">血统:文具店玻璃瓶 + 风铃的表妹 — 晃的时候星砂会真的流动,节拍可以让它轻轻一抖。</div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// ── shared driver: every demo registers {step(dt), draw()} ──────────────────
+// window.__ff(sec) fast-forwards all demos deterministically (for screenshots
+// in throttled tabs, and because seek-driven is just good hygiene).
+const DEMOS = [];
+function register(d) { DEMOS.push(d); }
+function cv(id) {
+  const c = document.getElementById(id);
+  const dpr = window.devicePixelRatio || 1;
+  const fit = () => {
+    const r = c.getBoundingClientRect();
+    c.width = r.width * dpr; c.height = r.height * dpr;
+    const ctx = c.getContext('2d');
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    return { w: r.width, h: r.height };
+  };
+  let size = fit();
+  window.addEventListener('resize', () => { size = fit(); });
+  return { ctx: c.getContext('2d'), get w() { return size.w; }, get h() { return size.h; } };
+}
+const TAU = Math.PI * 2;
+const rnd = (a, b) => a + Math.random() * (b - a);
+
+// ════ ① bubble ══════════════════════════════════════════════════════════════
+register((() => {
+  const { ctx, w, h } = cv('cv-bubble');
+  let t = rnd(0, 9), pop = -3, scale = 1;
+  const drops = [];
+  const sats = Array.from({ length: 3 }, () => ({
+    x: rnd(0.1, 0.9), y: rnd(0.3, 1.2), r: rnd(5, 11), s: rnd(8, 16), ph: rnd(0, TAU)
+  }));
+  function radius(th, R) {
+    return R * (1 + 0.045 * Math.sin(2 * th + t * 1.25)
+                  + 0.03  * Math.sin(3 * th - t * 0.8)
+                  + 0.018 * Math.sin(5 * th + t * 2.1));
+  }
+  function step(dt) {
+    t += dt;
+    // pop cycle: every ~16s burst into droplets, regrow
+    if (t - pop > 16) {
+      pop = t;
+      for (let i = 0; i < 16; i++) {
+        const a = rnd(0, TAU);
+        drops.push({ x: 0, y: 0, vx: Math.cos(a) * rnd(40, 130), vy: Math.sin(a) * rnd(40, 130) - 30, life: rnd(0.5, 1.1), hue: rnd(0, 360) });
+      }
+      scale = 0.06;
+    }
+    scale += (1 - scale) * Math.min(1, 2.2 * dt);
+    for (const d of drops) { d.x += d.vx * dt; d.y += d.vy * dt; d.vy += 60 * dt; d.life -= dt; }
+    for (let i = drops.length - 1; i >= 0; i--) if (drops[i].life <= 0) drops.splice(i, 1);
+    for (const s of sats) { s.y -= s.s * dt / 380; if (s.y < -0.08) { s.y = 1.15; s.x = rnd(0.1, 0.9); } }
+  }
+  function draw() {
+    const W = ctx.canvas.clientWidth || 440, H = ctx.canvas.clientHeight || 380;
+    ctx.clearRect(0, 0, W, H);
+    const cx = W * 0.5, cy = H * 0.44 + Math.sin(t * 0.55) * 9;
+    const R = Math.min(W, H) * 0.255 * scale;
+    // satellites
+    for (const s of sats) {
+      const sx = s.x * W, sy = s.y * H;
+      ctx.beginPath(); ctx.arc(sx, sy, s.r, 0, TAU);
+      ctx.strokeStyle = `hsla(${(t * 40 + s.ph * 60) % 360}, 70%, 80%, 0.35)`;
+      ctx.lineWidth = 1.2; ctx.stroke();
+      ctx.beginPath(); ctx.arc(sx - s.r * 0.35, sy - s.r * 0.35, s.r * 0.22, 0, TAU);
+      ctx.fillStyle = 'rgba(255,255,255,0.5)'; ctx.fill();
+    }
+    if (R > 2) {
+      // film interior
+      const g = ctx.createRadialGradient(cx, cy, R * 0.1, cx, cy, R);
+      g.addColorStop(0, 'rgba(255,255,255,0.012)');
+      g.addColorStop(0.72, 'rgba(190,215,255,0.045)');
+      g.addColorStop(1, 'rgba(235,240,255,0.1)');
+      ctx.beginPath();
+      for (let i = 0; i <= 72; i++) { const th = i / 72 * TAU, r = radius(th, R);
+        i ? ctx.lineTo(cx + Math.cos(th) * r, cy + Math.sin(th) * r) : ctx.moveTo(cx + r, cy); }
+      ctx.closePath(); ctx.fillStyle = g; ctx.fill();
+      // iridescent rim — hue crawls around the circumference
+      for (let i = 0; i < 72; i++) {
+        const th0 = i / 72 * TAU, th1 = (i + 1.4) / 72 * TAU;
+        const hue = (i / 72 * 360 + t * 55) % 360;
+        const glance = 0.5 + 0.5 * Math.sin(th0 * 3 + t * 1.6);
+        ctx.beginPath();
+        ctx.moveTo(cx + Math.cos(th0) * radius(th0, R), cy + Math.sin(th0) * radius(th0, R));
+        ctx.lineTo(cx + Math.cos(th1) * radius(th1, R), cy + Math.sin(th1) * radius(th1, R));
+        ctx.strokeStyle = `hsla(${hue}, 75%, 76%, ${0.18 + glance * 0.4})`;
+        ctx.lineWidth = 2.4 + glance * 1.4;
+        ctx.stroke();
+      }
+      // sheen band drifting across the film
+      ctx.save(); ctx.beginPath();
+      for (let i = 0; i <= 72; i++) { const th = i / 72 * TAU, r = radius(th, R);
+        i ? ctx.lineTo(cx + Math.cos(th) * r, cy + Math.sin(th) * r) : ctx.moveTo(cx + r, cy); }
+      ctx.closePath(); ctx.clip();
+      const ba = (t * 0.35) % TAU;
+      const bg = ctx.createLinearGradient(cx - Math.cos(ba) * R, cy - Math.sin(ba) * R, cx + Math.cos(ba) * R, cy + Math.sin(ba) * R);
+      bg.addColorStop(0.42, 'rgba(255,255,255,0)');
+      bg.addColorStop(0.5, `hsla(${(t * 30) % 360}, 80%, 85%, 0.13)`);
+      bg.addColorStop(0.58, 'rgba(255,255,255,0)');
+      ctx.fillStyle = bg; ctx.fillRect(cx - R, cy - R, R * 2, R * 2);
+      ctx.restore();
+      // speculars
+      ctx.beginPath(); ctx.ellipse(cx - R * 0.42, cy - R * 0.46, R * 0.16, R * 0.07, -0.7, 0, TAU);
+      ctx.fillStyle = 'rgba(255,255,255,0.55)'; ctx.fill();
+      ctx.beginPath(); ctx.arc(cx - R * 0.2, cy - R * 0.6, R * 0.035, 0, TAU);
+      ctx.fillStyle = 'rgba(255,255,255,0.8)'; ctx.fill();
+      ctx.beginPath(); ctx.ellipse(cx + R * 0.4, cy + R * 0.5, R * 0.1, R * 0.04, 0.6, 0, TAU);
+      ctx.fillStyle = 'rgba(255,255,255,0.18)'; ctx.fill();
+    }
+    // pop droplets
+    for (const d of drops) {
+      ctx.beginPath(); ctx.arc(cx + d.x, cy + d.y, 2.2, 0, TAU);
+      ctx.strokeStyle = `hsla(${d.hue}, 75%, 80%, ${Math.max(0, d.life)})`;
+      ctx.lineWidth = 1; ctx.stroke();
+    }
+  }
+  return { step, draw };
+})());
+
+// ════ ② light dust ══════════════════════════════════════════════════════════
+register((() => {
+  const { ctx } = cv('cv-dust');
+  let t = 0;
+  const P = Array.from({ length: 52 }, () => ({
+    x: Math.random(), y: Math.random(), z: Math.random(),
+    ph: rnd(0, TAU), fq: rnd(0.4, 1.6),
+    pal: [[255, 233, 196], [207, 232, 255], [255, 217, 232], [255, 255, 255]][Math.random() * 4 | 0]
+  }));
+  function step(dt) {
+    t += dt;
+    for (const p of P) {
+      p.x += (0.006 + p.z * 0.014) * dt; p.y -= (0.003 + p.z * 0.009) * dt;
+      if (p.x > 1.05) p.x = -0.05; if (p.y < -0.05) p.y = 1.05;
+    }
+  }
+  function draw() {
+    const W = ctx.canvas.clientWidth || 440, H = ctx.canvas.clientHeight || 380;
+    ctx.clearRect(0, 0, W, H);
+    // light shaft
+    ctx.save(); ctx.translate(W * 0.62, 0); ctx.rotate(0.5);
+    const sg = ctx.createLinearGradient(-70, 0, 90, 0);
+    sg.addColorStop(0, 'rgba(255,226,170,0)');
+    sg.addColorStop(0.5, `rgba(255,226,170,${0.05 + 0.02 * Math.sin(t * 0.4)})`);
+    sg.addColorStop(1, 'rgba(255,226,170,0)');
+    ctx.fillStyle = sg; ctx.fillRect(-90, -40, 200, H * 1.8); ctx.restore();
+    ctx.globalCompositeOperation = 'lighter';
+    for (const p of P) {
+      const tw = 0.5 + 0.5 * Math.sin(t * p.fq + p.ph);
+      const r = 1.5 + p.z * 13 * (0.75 + tw * 0.3);
+      const a = (0.05 + tw * 0.3) * (0.35 + p.z * 0.65);
+      const x = p.x * W, y = p.y * H;
+      const [cr, cg, cb] = p.pal;
+      const g = ctx.createRadialGradient(x, y, 0, x, y, r);
+      g.addColorStop(0, `rgba(${cr},${cg},${cb},${a})`);
+      g.addColorStop(1, `rgba(${cr},${cg},${cb},0)`);
+      ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); ctx.fillStyle = g; ctx.fill();
+      // sharp glint cross at twinkle peak on the bigger ones
+      if (tw > 0.93 && p.z > 0.55) {
+        const L = r * 2.6, a2 = (tw - 0.93) / 0.07 * 0.5;
+        ctx.strokeStyle = `rgba(255,255,255,${a2})`; ctx.lineWidth = 0.8;
+        ctx.beginPath();
+        ctx.moveTo(x - L, y); ctx.lineTo(x + L, y);
+        ctx.moveTo(x, y - L); ctx.lineTo(x, y + L);
+        ctx.stroke();
+      }
+    }
+    ctx.globalCompositeOperation = 'source-over';
+  }
+  return { step, draw };
+})());
+
+// ════ ③ crystal pendant (SVG) ═══════════════════════════════════════════════
+register((() => {
+  const svg = document.getElementById('sv-crystal');
+  const NS = 'http://www.w3.org/2000/svg';
+  // marquise gem: shared vertices → facets
+  const V = {
+    tip: [0, -64], bot: [0, 70],
+    ul: [-21, -28], ur: [21, -28],
+    wl: [-34, 8], wr: [34, 8],
+    ll: [-20, 42], lr: [20, 42],
+  };
+  const FACETS = [
+    { pts: ['tip', 'ul', 'ur'], hue: [232, 86, 88] },
+    { pts: ['ul', 'wl', 'tip'], hue: [258, 80, 82], d: 1 },
+    { pts: ['ur', 'tip', 'wr'], hue: [205, 85, 84], d: 2 },
+    { pts: ['ul', 'ur', 'wr', 'wl'], hue: [288, 70, 86], d: 3 },
+    { pts: ['wl', 'wr', 'lr', 'll'], hue: [222, 80, 80], d: 4 },
+    { pts: ['wl', 'll', 'bot'], hue: [330, 65, 84], d: 5 },
+    { pts: ['wr', 'bot', 'lr'], hue: [248, 75, 78], d: 6 },
+    { pts: ['ll', 'lr', 'bot'], hue: [210, 80, 86], d: 7 },
+  ];
+  svg.innerHTML = `
+    <g id="cp-root" transform="translate(220,30)">
+      <line x1="0" y1="-30" x2="0" y2="58" stroke="rgba(214,196,150,.8)" stroke-width="1.4"/>
+      <g id="cp-swing">
+        <path d="M -6 64 q 6 -8 12 0 q -6 7 -12 0 Z" fill="#d9c08a" opacity=".95"/>
+        <g id="cp-gem" transform="translate(0,140)">
+          ${FACETS.map((f, i) => `<polygon id="cp-f${i}" points="${f.pts.map(k => V[k].join(',')).join(' ')}"
+              stroke="rgba(255,255,255,.55)" stroke-width=".7" stroke-linejoin="round"/>`).join('')}
+          <polygon points="${['tip', 'ur', 'wr', 'lr', 'bot', 'll', 'wl', 'ul'].map(k => V[k].join(',')).join(' ')}"
+              fill="none" stroke="rgba(255,255,255,.7)" stroke-width="1.1" stroke-linejoin="round"/>
+          <g id="cp-glint" opacity="0">
+            <path d="M 0 -13 L 2.6 -2.6 L 13 0 L 2.6 2.6 L 0 13 L -2.6 2.6 L -13 0 L -2.6 -2.6 Z" fill="#fff"/>
+          </g>
+        </g>
+      </g>
+    </g>
+    <g id="cp-streak" opacity="0.0" transform="translate(285,330) rotate(-18)">
+      <rect x="-34" y="-3" width="26" height="5" rx="2.5" fill="rgba(255,120,150,.30)"/>
+      <rect x="-6"  y="-3" width="26" height="5" rx="2.5" fill="rgba(150,235,170,.28)"/>
+      <rect x="22"  y="-3" width="26" height="5" rx="2.5" fill="rgba(140,180,255,.30)"/>
+    </g>`;
+  const swing = svg.querySelector('#cp-swing');
+  const glint = svg.querySelector('#cp-glint');
+  const streak = svg.querySelector('#cp-streak');
+  const facetEls = FACETS.map((_, i) => svg.querySelector('#cp-f' + i));
+  let t = rnd(0, 7), nextGlint = 2.5, glintT = -1, glintPos = [0, 0];
+  const GP = [[0, -40], [-16, -10], [18, -6], [0, 20], [-12, 38], [14, 30]];
+  function step(dt) {
+    t += dt;
+    if (t > nextGlint) { nextGlint = t + rnd(3.5, 6.5); glintT = t; glintPos = GP[Math.random() * GP.length | 0]; }
+  }
+  function draw() {
+    swing.setAttribute('transform', `rotate(${(1.7 * Math.sin(t * 0.62) + 0.5 * Math.sin(t * 1.31)).toFixed(3)})`);
+    FACETS.forEach((f, i) => {
+      const ph = (f.d || 0) * 1.13;
+      const lum = f.hue[2] + 7 * Math.sin(t * 0.7 + ph);
+      const sat = f.hue[1];
+      const a = 0.62 + 0.22 * Math.sin(t * 0.9 + ph * 1.7);
+      facetEls[i].setAttribute('fill', `hsla(${f.hue[0]}, ${sat}%, ${lum}%, ${a.toFixed(3)})`);
+    });
+    const gAge = t - glintT;
+    if (gAge >= 0 && gAge < 0.8) {
+      const k = gAge / 0.8, s = Math.sin(k * Math.PI);
+      glint.setAttribute('opacity', (s * 0.95).toFixed(3));
+      glint.setAttribute('transform', `translate(${glintPos[0]},${glintPos[1]}) scale(${(0.4 + s * 0.8).toFixed(3)}) rotate(${k * 90})`);
+      streak.setAttribute('opacity', (s * 0.8).toFixed(3));
+    } else { glint.setAttribute('opacity', '0'); streak.setAttribute('opacity', (0.12 + 0.06 * Math.sin(t)).toFixed(3)); }
+  }
+  return { step, draw };
+})());
+
+// ════ ④ wisp ════════════════════════════════════════════════════════════════
+register((() => {
+  const { ctx } = cv('cv-wisp');
+  let t = 0;
+  const W0 = 440, H0 = 380;
+  const head = { x: 220, y: 170, vx: 0, vy: 0 };
+  let target = { x: 300, y: 140 }, retarget = 0, dartUntil = -1, nextDart = 6;
+  const tail = Array.from({ length: 26 }, () => ({ x: 220, y: 170 }));
+  const sparks = [];
+  function step(dt) {
+    t += dt;
+    const W = ctx.canvas.clientWidth || W0, H = ctx.canvas.clientHeight || H0;
+    if (t > retarget) { retarget = t + rnd(2.2, 4); target = { x: rnd(70, W - 70), y: rnd(60, H - 110) }; }
+    if (t > nextDart) { nextDart = t + rnd(5, 9); dartUntil = t + 0.5; target = { x: rnd(70, W - 70), y: rnd(60, H - 110) }; }
+    const k = (t < dartUntil ? 26 : 3.2);
+    head.vx += (target.x - head.x) * k * dt; head.vy += (target.y - head.y) * k * dt;
+    const damp = Math.pow(t < dartUntil ? 0.06 : 0.12, dt);
+    head.vx *= damp; head.vy *= damp;
+    head.x += head.vx * dt + Math.sin(t * 2.1) * 14 * dt;
+    head.y += head.vy * dt + Math.cos(t * 1.7) * 10 * dt;
+    let px = head.x, py = head.y;
+    for (const s of tail) {
+      const f = Math.min(1, 14 * dt);
+      s.x += (px - s.x) * f; s.y += (py - s.y) * f; px = s.x; py = s.y;
+    }
+    if (Math.random() < 0.12) {
+      const i = Math.random() * 14 | 0;
+      sparks.push({ x: tail[i].x + rnd(-4, 4), y: tail[i].y + rnd(-4, 4), life: rnd(0.4, 0.8) });
+    }
+    for (const s of sparks) { s.y -= 8 * dt; s.life -= dt; }
+    for (let i = sparks.length - 1; i >= 0; i--) if (sparks[i].life <= 0) sparks.splice(i, 1);
+  }
+  function draw() {
+    const W = ctx.canvas.clientWidth || W0, H = ctx.canvas.clientHeight || H0;
+    ctx.clearRect(0, 0, W, H);
+    ctx.globalCompositeOperation = 'lighter';
+    for (let i = tail.length - 1; i >= 0; i--) {
+      const s = tail[i], k = 1 - i / tail.length;
+      const r = 1 + k * 8, a = 0.018 + k * 0.085;
+      const g = ctx.createRadialGradient(s.x, s.y, 0, s.x, s.y, r * 2.6);
+      g.addColorStop(0, `rgba(190,235,255,${a})`); g.addColorStop(1, 'rgba(190,235,255,0)');
+      ctx.beginPath(); ctx.arc(s.x, s.y, r * 2.6, 0, TAU); ctx.fillStyle = g; ctx.fill();
+    }
+    const hg = ctx.createRadialGradient(head.x, head.y, 0, head.x, head.y, 22);
+    hg.addColorStop(0, 'rgba(230,250,255,0.5)'); hg.addColorStop(0.4, 'rgba(180,230,255,0.18)'); hg.addColorStop(1, 'rgba(180,230,255,0)');
+    ctx.beginPath(); ctx.arc(head.x, head.y, 22, 0, TAU); ctx.fillStyle = hg; ctx.fill();
+    ctx.beginPath(); ctx.arc(head.x, head.y, 3.2, 0, TAU); ctx.fillStyle = 'rgba(255,255,255,0.95)'; ctx.fill();
+    for (const s of sparks) {
+      ctx.beginPath(); ctx.arc(s.x, s.y, 1.1, 0, TAU);
+      ctx.fillStyle = `rgba(255,255,255,${Math.max(0, s.life)})`; ctx.fill();
+    }
+    ctx.globalCompositeOperation = 'source-over';
+  }
+  return { step, draw };
+})());
+
+// ════ ⑤ mobile (SVG) ════════════════════════════════════════════════════════
+register((() => {
+  const svg = document.getElementById('sv-mobile');
+  svg.innerHTML = `
+    <g transform="translate(220,12)">
+      <line x1="0" y1="0" x2="0" y2="64" stroke="rgba(225,220,235,.5)" stroke-width="1.2"/>
+      <g id="mb-arm1" transform="translate(0,64)">
+        <path d="M -128 10 Q 0 -14 122 6" fill="none" stroke="rgba(228,224,238,.75)" stroke-width="2" stroke-linecap="round"/>
+        <g transform="translate(-128,10)">
+          <line x1="0" y1="0" x2="0" y2="46" stroke="rgba(225,220,235,.45)" stroke-width="1"/>
+          <g id="mb-moon" transform="translate(0,78)">
+            <path d="M 0 -30 A 30 30 0 1 0 0 30 A 38 38 0 0 1 0 -30 Z"
+                  fill="rgba(255,241,205,.92)" transform="rotate(-24)"/>
+          </g>
+        </g>
+        <g transform="translate(122,6)">
+          <line x1="0" y1="0" x2="0" y2="30" stroke="rgba(225,220,235,.45)" stroke-width="1"/>
+          <g id="mb-arm2" transform="translate(0,30)">
+            <path d="M -64 6 Q 0 -8 58 4" fill="none" stroke="rgba(228,224,238,.65)" stroke-width="1.6" stroke-linecap="round"/>
+            <g transform="translate(-64,6)">
+              <line x1="0" y1="0" x2="0" y2="34" stroke="rgba(225,220,235,.4)" stroke-width="1"/>
+              <g id="mb-drop" transform="translate(0,56)">
+                <path d="M 0 -22 C 11 -8 15 2 15 9 A 15 15 0 1 1 -15 9 C -15 2 -11 -8 0 -22 Z" fill="url(#mb-gdrop)" stroke="rgba(255,255,255,.4)" stroke-width=".7"/>
+                <ellipse cx="-4.5" cy="2" rx="3" ry="6" fill="rgba(255,255,255,.5)" transform="rotate(-14 -4.5 2)"/>
+              </g>
+            </g>
+            <g transform="translate(58,4)">
+              <line x1="0" y1="0" x2="0" y2="24" stroke="rgba(225,220,235,.4)" stroke-width="1"/>
+              <g id="mb-star" transform="translate(0,38)">
+                <path d="M 0 -13 L 3.6 -4 L 13 -3.4 L 5.8 2.8 L 8 12 L 0 6.8 L -8 12 L -5.8 2.8 L -13 -3.4 L -3.6 -4 Z"
+                      fill="rgba(255,222,150,.95)"/>
+              </g>
+            </g>
+          </g>
+        </g>
+      </g>
+    </g>
+    <defs>
+      <linearGradient id="mb-gdrop" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="rgba(190,228,255,.9)"/>
+        <stop offset="1" stop-color="rgba(150,190,245,.75)"/>
+      </linearGradient>
+    </defs>`;
+  const arm1 = svg.querySelector('#mb-arm1'), arm2 = svg.querySelector('#mb-arm2');
+  const moon = svg.querySelector('#mb-moon'), drop = svg.querySelector('#mb-drop'), star = svg.querySelector('#mb-star');
+  let t = rnd(0, 8), gust = 0;
+  function step(dt) { t += dt; gust = Math.max(0, Math.sin(t * 0.11) - 0.86) * 7; }
+  function draw() {
+    const k = 1 + gust;
+    arm1.setAttribute('transform', `translate(0,64) rotate(${(2.0 * k * Math.sin(t * 0.42)).toFixed(3)})`);
+    arm2.setAttribute('transform', `translate(0,30) rotate(${(2.8 * k * Math.sin(t * 0.66 + 1.2)).toFixed(3)})`);
+    moon.setAttribute('transform', `translate(0,78) rotate(${(7 * Math.sin(t * 0.31 + 0.6)).toFixed(3)}) translate(0,${(2.5 * Math.sin(t * 0.8)).toFixed(2)})`);
+    drop.setAttribute('transform', `translate(0,56) rotate(${(8 * Math.sin(t * 0.5 + 2.2)).toFixed(3)})`);
+    star.setAttribute('transform', `translate(0,38) rotate(${(10 * Math.sin(t * 0.44 + 4)).toFixed(3)})`);
+  }
+  return { step, draw };
+})());
+
+// ════ ⑥ stardust vial ═══════════════════════════════════════════════════════
+register((() => {
+  const { ctx } = cv('cv-vial');
+  let t = rnd(0, 5);
+  const VW = 58, VH = 116; // vial inner box (local coords, centered)
+  const P = Array.from({ length: 44 }, () => ({
+    x: rnd(-VW / 2 + 4, VW / 2 - 4), y: rnd(-VH / 2 + 8, VH / 2 - 4),
+    vx: 0, vy: 0, r: rnd(1.2, 2.4), ph: rnd(0, TAU), fq: rnd(0.8, 2.2),
+    pal: [[255, 224, 150], [255, 190, 215], [170, 225, 255], [255, 250, 235]][Math.random() * 4 | 0],
+    fly: Math.random() < 0.12
+  }));
+  const ang = () => 0.16 * Math.sin(t * 0.6) + 0.05 * Math.sin(t * 1.7);
+  function step(dt) {
+    t += dt;
+    const a = ang();
+    const gx = Math.sin(-a) * 150, gy = Math.cos(-a) * 150; // gravity in vial frame
+    for (const p of P) {
+      if (p.fly) {
+        p.x += Math.sin(t * p.fq + p.ph) * 6 * dt; p.y -= 7 * dt;
+        if (p.y < -VH / 2 + 6) p.y = VH / 2 - 8;
+      } else {
+        p.vx += gx * dt; p.vy += gy * dt;
+        const d = Math.pow(0.18, dt); p.vx *= d; p.vy *= d;
+        p.x += p.vx * dt; p.y += p.vy * dt;
+        const xm = VW / 2 - 3, ytop = -VH / 2 + 5, ybot = VH / 2 - 4;
+        if (p.x < -xm) { p.x = -xm; p.vx *= -0.25; } if (p.x > xm) { p.x = xm; p.vx *= -0.25; }
+        if (p.y < ytop) { p.y = ytop; p.vy *= -0.2; } if (p.y > ybot) { p.y = ybot; p.vy *= -0.25; }
+      }
+    }
+  }
+  function draw() {
+    const W = ctx.canvas.clientWidth || 440, H = ctx.canvas.clientHeight || 380;
+    ctx.clearRect(0, 0, W, H);
+    const cx = W * 0.5, cy = H * 0.47, a = ang();
+    // cord (from top of card to cork, follows tilt)
+    const corkX = cx + Math.sin(a) * -(VH / 2 + 16), corkY = cy - Math.cos(a) * (VH / 2 + 16);
+    ctx.strokeStyle = 'rgba(120,98,70,.85)'; ctx.lineWidth = 1.4;
+    ctx.beginPath(); ctx.moveTo(cx, 0); ctx.lineTo(corkX, corkY); ctx.stroke();
+    ctx.save(); ctx.translate(cx, cy); ctx.rotate(a);
+    // glass body
+    ctx.beginPath();
+    ctx.roundRect(-VW / 2, -VH / 2, VW, VH, 14);
+    ctx.fillStyle = 'rgba(205,232,235,.07)'; ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,.4)'; ctx.lineWidth = 1.4; ctx.stroke();
+    // settle-pool glow at the current "down" end
+    const pg = ctx.createRadialGradient(0, VH / 2 - 10, 2, 0, VH / 2 - 10, 34);
+    pg.addColorStop(0, 'rgba(255,225,170,.22)'); pg.addColorStop(1, 'rgba(255,225,170,0)');
+    ctx.fillStyle = pg; ctx.fillRect(-VW / 2, 0, VW, VH / 2);
+    // particles
+    for (const p of P) {
+      const tw = 0.55 + 0.45 * Math.sin(t * p.fq * 2 + p.ph);
+      const [r, g, b] = p.pal;
+      ctx.beginPath(); ctx.arc(p.x, p.y, p.r * (p.fly ? 1.1 : 1), 0, TAU);
+      ctx.fillStyle = `rgba(${r},${g},${b},${(0.35 + tw * 0.6).toFixed(3)})`;
+      ctx.fill();
+      if (tw > 0.9) {
+        ctx.strokeStyle = `rgba(255,255,255,${((tw - 0.9) * 5).toFixed(2)})`; ctx.lineWidth = 0.7;
+        const L = p.r * 3;
+        ctx.beginPath(); ctx.moveTo(p.x - L, p.y); ctx.lineTo(p.x + L, p.y);
+        ctx.moveTo(p.x, p.y - L); ctx.lineTo(p.x, p.y + L); ctx.stroke();
+      }
+    }
+    // glass highlights over particles
+    ctx.beginPath(); ctx.roundRect(-VW / 2 + 4, -VH / 2 + 5, 7, VH - 14, 5);
+    ctx.fillStyle = 'rgba(255,255,255,.10)'; ctx.fill();
+    ctx.beginPath(); ctx.roundRect(VW / 2 - 8, -VH / 2 + 10, 3.5, VH * 0.4, 3);
+    ctx.fillStyle = 'rgba(255,255,255,.07)'; ctx.fill();
+    // cork
+    ctx.beginPath(); ctx.roundRect(-13, -VH / 2 - 17, 26, 19, 4);
+    ctx.fillStyle = '#b08d62'; ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,.18)'; ctx.fillRect(-13, -VH / 2 - 17, 26, 4);
+    ctx.restore();
+  }
+  return { step, draw };
+})());
+
+// ── run ──────────────────────────────────────────────────────────────────────
+let last = performance.now();
+function loop(now) {
+  const dt = Math.min(0.05, (now - last) / 1000); last = now;
+  for (const d of DEMOS) { try { d.step(dt); } catch (e) {} }
+  for (const d of DEMOS) { try { d.draw(); } catch (e) {} }
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+// deterministic fast-forward (works even when rAF is throttled)
+window.__ff = (sec) => {
+  const n = Math.round(sec * 60);
+  for (let i = 0; i < n; i++) for (const d of DEMOS) { try { d.step(1 / 60); } catch (e) {} }
+  for (const d of DEMOS) { try { d.draw(); } catch (e) {} }
+  return 'ff ' + sec + 's';
+};
+</script>
+</body>
+</html>

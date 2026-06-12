@@ -1,0 +1,389 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>echo · 天际线 原型</title>
+<style>
+  :root { color-scheme: dark; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 100%; height: 100%; overflow: hidden; }
+  body {
+    background: #07070b;
+    font: 13px/1.5 -apple-system, "PingFang SC", "Hiragino Sans", system-ui, sans-serif;
+    color: #fff;
+  }
+  /* The canvas IS the sky — it fills the frame. width/height:100% required so a
+     retina canvas isn't laid out at its 2× attribute size (off-screen). */
+  #c { position: fixed; inset: 0; width: 100%; height: 100%; display: block; z-index: 0; }
+  /* Same vignette + grain treatment as the breathing ornament, so the two read
+     as one family: seat the light, kill the flat "digital void". */
+  #vignette { position: fixed; inset: 0; z-index: 1; pointer-events: none;
+    background: radial-gradient(130% 120% at 50% 38%, transparent 56%, rgba(0,0,0,0.46) 100%); }
+  #grain { position: fixed; inset: 0; z-index: 2; pointer-events: none; opacity: 0.035;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"); }
+
+  /* ── control panel (collapsible — press H) ───────────────────────────── */
+  #panel {
+    position: fixed; left: 18px; bottom: 18px; z-index: 10;
+    width: 276px; padding: 14px 16px 16px;
+    background: rgba(20, 20, 26, 0.6);
+    backdrop-filter: blur(20px) saturate(1.4);
+    -webkit-backdrop-filter: blur(20px) saturate(1.4);
+    border: 0.5px solid rgba(255, 255, 255, 0.1);
+    border-radius: 16px;
+    box-shadow: 0 18px 50px -20px rgba(0, 0, 0, 0.7);
+    user-select: none;
+    transition: opacity 240ms ease, transform 240ms ease;
+  }
+  #panel.hidden { opacity: 0; transform: translateY(8px); pointer-events: none; }
+  #panel h1 { font-size: 12px; font-weight: 600; letter-spacing: 0.3px; opacity: 0.9; margin-bottom: 2px; }
+  #panel .sub { font-size: 10.5px; opacity: 0.42; margin-bottom: 12px; }
+  .clock { font-variant-numeric: tabular-nums; font-size: 22px; font-weight: 300; letter-spacing: 1px;
+           margin: 2px 0 6px; opacity: 0.92; }
+  .clock small { font-size: 11px; opacity: 0.5; margin-left: 6px; letter-spacing: 0; }
+  .row { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
+  .row label { width: 40px; font-size: 11px; opacity: 0.6; flex: none; }
+  .row input[type=range] { flex: 1; accent-color: #c9a6ff; height: 3px; }
+  .row .val { width: 30px; text-align: right; font-variant-numeric: tabular-nums; font-size: 10.5px; opacity: 0.55; }
+  .btns { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
+  button {
+    font: inherit; font-size: 11.5px; color: #fff;
+    background: rgba(255, 255, 255, 0.07);
+    border: 0.5px solid rgba(255, 255, 255, 0.12);
+    border-radius: 9px; padding: 6px 11px; cursor: pointer;
+    transition: background 140ms ease, transform 100ms ease;
+  }
+  button:hover { background: rgba(255, 255, 255, 0.13); }
+  button:active { transform: scale(0.94); }
+  button.primary { background: rgba(170, 130, 255, 0.28); border-color: rgba(170, 130, 255, 0.4); }
+  button.on { background: rgba(120, 230, 150, 0.24); border-color: rgba(120, 230, 150, 0.4); }
+  .hint { margin-top: 12px; font-size: 10px; opacity: 0.34; line-height: 1.6; }
+  kbd { font: inherit; font-size: 9.5px; padding: 1px 4px; border-radius: 4px;
+        background: rgba(255,255,255,0.1); border: 0.5px solid rgba(255,255,255,0.14); }
+</style>
+</head>
+<body>
+  <canvas id="c"></canvas>
+  <div id="vignette"></div>
+  <div id="grain"></div>
+
+  <div id="panel">
+    <h1>echo · 天际线 原型</h1>
+    <div class="sub">一条地平线 + 一个日月 · 天色随时刻走，云/星/反光一直在动</div>
+
+    <div class="clock" id="clock">12:00<small id="phase">正午</small></div>
+    <div class="row"><label>时刻</label><input id="time" type="range" min="0" max="1439" value="720"></div>
+
+    <div class="btns">
+      <button id="real">真实时间</button>
+      <button id="lapse">流逝</button>
+      <button data-jump="390">拂晓</button>
+      <button data-jump="720">正午</button>
+      <button data-jump="1110">黄昏</button>
+      <button data-jump="1380">深夜</button>
+    </div>
+    <div class="btns"><button id="play" class="primary" style="flex:1">▶ 播放（看歌词态）</button></div>
+
+    <div class="row" style="margin-top:12px"><label>云量</label><input id="cloud" type="range" min="0" max="100" value="55"><span class="val" id="cloudV">55</span></div>
+    <div class="row"><label>微动</label><input id="motion" type="range" min="0" max="100" value="50"><span class="val" id="motionV">50</span></div>
+
+    <div class="hint">
+      拖「时刻」看一天的天色 · 「流逝」让一天在 ~30s 内走完<br>
+      微动 → 云速 + 星闪 + 反光抖动（冻在某一刻也要活）<br>
+      <kbd>空格</kbd> 播放 &nbsp; <kbd>T</kbd> 真实时间 &nbsp; <kbd>L</kbd> 流逝 &nbsp; <kbd>H</kbd> 面板
+    </div>
+  </div>
+
+<script>
+// ─────────────────────────────────────────────────────────────────────────
+//  echo · horizon ornament prototype
+//  A thin horizon + one luminous body (sun by day, moon by night) in a sky
+//  whose colour is a function of WALL-CLOCK TIME. The point of this theme is
+//  that it's a different object at every hour — alive over a day, not a loop.
+//  But an ornament must also be alive *frozen in a single moment*, so drifting
+//  cloud bands, twinkling stars, a breathing glow and a wavering reflection
+//  keep it moving even with the clock paused and no music. Pure canvas, no app
+//  code — the time/cloud/motion sliders stand in for the real clock + signals.
+// ─────────────────────────────────────────────────────────────────────────
+const cv = document.getElementById('c');
+const ctx = cv.getContext('2d');
+let W = 0, H = 0, DPR = 1;
+function resize() {
+  DPR = Math.min(window.devicePixelRatio || 1, 2);
+  W = window.innerWidth; H = window.innerHeight;
+  cv.width = Math.floor(W * DPR); cv.height = Math.floor(H * DPR);
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+}
+window.addEventListener('resize', resize); resize();
+
+// ── tunables ────────────────────────────────────────────────────────────
+const HORIZON   = 0.66;   // horizon line position (fraction of height). sky above, water below.
+const ARC       = 0.80;   // body's peak height above horizon, as a fraction of the sky band
+const STAR_N    = 70;
+const LAPSE_SECS = 30;    // real-time-seconds for a full simulated day in "流逝" mode
+
+// ── sky keyframes around the 24h clock ────────────────────────────────────
+// top / hor(izon band) / glow(sun-halo + golden band). DESATURATED on purpose —
+// low saturation + direct RGB lerp (never through a neon hue) is the single
+// biggest "not-cheap" lever, same rule the breathing ornament follows.
+// star = how visible the stars are; light = overall luminosity (0..1).
+const SKY = [
+  { h:0.0,  top:[12,14,26],   hor:[20,22,42],    glow:[36,36,64],    star:1.00, light:0.10 },
+  { h:5.0,  top:[26,28,46],   hor:[64,58,78],    glow:[120,92,98],   star:0.55, light:0.22 },
+  { h:6.6,  top:[64,82,120],  hor:[222,150,118], glow:[255,196,148], star:0.06, light:0.55 },
+  { h:9.0,  top:[98,142,196], hor:[182,206,226], glow:[224,228,236], star:0.00, light:0.85 },
+  { h:12.0, top:[122,166,216],hor:[206,223,236], glow:[242,244,247], star:0.00, light:1.00 },
+  { h:16.0, top:[112,150,200],hor:[216,206,196], glow:[242,226,206], star:0.00, light:0.85 },
+  { h:18.4, top:[58,62,108],  hor:[236,122,82],  glow:[255,164,98],  star:0.05, light:0.50 },
+  { h:19.8, top:[32,34,64],   hor:[92,72,102],   glow:[150,98,112],  star:0.40, light:0.28 },
+  { h:22.0, top:[16,18,32],   hor:[30,32,54],    glow:[48,44,72],    star:0.90, light:0.14 },
+  { h:24.0, top:[12,14,26],   hor:[20,22,42],    glow:[36,36,64],    star:1.00, light:0.10 },
+];
+
+// ── state ─────────────────────────────────────────────────────────────────
+const S = {
+  hour: 12,            // 0..24 — the driver
+  realtime: false,
+  lapse: false,
+  playing: false,
+  cloud: 0.55,
+  motion: 0.50,
+  t: 0,                // seconds since load — drives all the micro-motion
+  lyricIdx: 0, lyricT: 0,
+};
+
+const LYRICS = [
+  '天还没亮的时候',
+  '我把这一天先想了一遍',
+  'the sky keeps every hour we forget',
+  '黄昏把影子拉得好长',
+  '等一颗星先亮起来',
+];
+
+const STARS = Array.from({ length: STAR_N }, () => ({
+  x: Math.random(),
+  y: Math.random() * 0.7,          // upper sky only
+  r: 0.5 + Math.random() * 1.2,
+  spd: 0.6 + Math.random() * 1.8,
+  ph: Math.random() * Math.PI * 2,
+}));
+
+// ── helpers ─────────────────────────────────────────────────────────────
+const lerp  = (a, b, t) => a + (b - a) * t;
+const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
+const lerp3 = (a, b, t) => [lerp(a[0],b[0],t), lerp(a[1],b[1],t), lerp(a[2],b[2],t)];
+const mix3  = (a, b, t) => `rgb(${lerp(a[0],b[0],t)|0},${lerp(a[1],b[1],t)|0},${lerp(a[2],b[2],t)|0})`;
+const rgba  = (c, a) => `rgba(${c[0]|0},${c[1]|0},${c[2]|0},${a})`;
+const smoothstep = (e0, e1, x) => { const t = clamp((x-e0)/(e1-e0),0,1); return t*t*(3-2*t); };
+
+// Interpolate the sky palette for a given hour.
+function skyAt(h) {
+  h = ((h % 24) + 24) % 24;
+  let i = 0;
+  while (i < SKY.length - 1 && SKY[i + 1].h <= h) i++;
+  const a = SKY[i], b = SKY[Math.min(i + 1, SKY.length - 1)];
+  const t = b.h === a.h ? 0 : (h - a.h) / (b.h - a.h);
+  return {
+    top:  lerp3(a.top, b.top, t),
+    hor:  lerp3(a.hor, b.hor, t),
+    glow: lerp3(a.glow, b.glow, t),
+    star: lerp(a.star, b.star, t),
+    light: lerp(a.light, b.light, t),
+  };
+}
+
+// Which body is up, where, and how high (0=on horizon, 1=zenith). Sun rises ~6
+// sets ~18 (peaks at noon); moon rises ~18 sets ~6 (peaks at midnight) — so the
+// scene is literally a clock you can read at a glance.
+function body(h) {
+  const sunP = (h - 6) / 12;                       // 0..1 across the day
+  if (sunP >= -0.05 && sunP <= 1.05) {
+    return { kind: 'sun', x: clamp(sunP, 0, 1), alt: Math.max(0, Math.sin(sunP * Math.PI)) };
+  }
+  const mh = h < 6 ? h + 24 : h;                   // 18..30
+  const moonP = (mh - 18) / 12;                    // 0..1 across the night
+  return { kind: 'moon', x: clamp(moonP, 0, 1), alt: Math.max(0, Math.sin(moonP * Math.PI)) };
+}
+
+const fmtClock = (h) => {
+  const m = Math.round(h * 60) % 1440;
+  return String(Math.floor(m / 60)).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0');
+};
+const phaseName = (h) =>
+  h < 5 ? '凌晨' : h < 6.8 ? '拂晓' : h < 11 ? '清晨' : h < 13 ? '正午' :
+  h < 16.5 ? '午后' : h < 18.2 ? '向晚' : h < 19.8 ? '黄昏' : h < 22 ? '入夜' : '深夜';
+
+// ── input ───────────────────────────────────────────────────────────────
+const timeEl = document.getElementById('time');
+const clockEl = document.getElementById('clock'), phaseEl = document.getElementById('phase');
+const realBtn = document.getElementById('real'), lapseBtn = document.getElementById('lapse');
+const playBtn = document.getElementById('play');
+
+function setHour(h, fromUI) {
+  S.hour = ((h % 24) + 24) % 24;
+  if (!fromUI) timeEl.value = Math.round(S.hour * 60);
+}
+timeEl.oninput = () => { S.realtime = false; realBtn.classList.remove('on'); S.lapse = false; lapseBtn.classList.remove('on'); setHour(+timeEl.value / 60, true); };
+
+realBtn.onclick = () => {
+  S.realtime = !S.realtime;
+  realBtn.classList.toggle('on', S.realtime);
+  if (S.realtime) { S.lapse = false; lapseBtn.classList.remove('on'); }
+};
+lapseBtn.onclick = () => {
+  S.lapse = !S.lapse;
+  lapseBtn.classList.toggle('on', S.lapse);
+  if (S.lapse) { S.realtime = false; realBtn.classList.remove('on'); }
+};
+document.querySelectorAll('[data-jump]').forEach((b) => {
+  b.onclick = () => { S.realtime = S.lapse = false; realBtn.classList.remove('on'); lapseBtn.classList.remove('on'); setHour(+b.dataset.jump / 60); };
+});
+
+function setPlaying(on) {
+  S.playing = on;
+  playBtn.textContent = on ? '⏹ 停止' : '▶ 播放（看歌词态）';
+  playBtn.classList.toggle('on', on);
+  if (on) { S.lyricIdx = 0; S.lyricT = 0; }
+}
+playBtn.onclick = () => setPlaying(!S.playing);
+
+const cloudEl = document.getElementById('cloud'), cloudV = document.getElementById('cloudV');
+const motionEl = document.getElementById('motion'), motionV = document.getElementById('motionV');
+cloudEl.oninput  = () => { S.cloud = +cloudEl.value / 100; cloudV.textContent = cloudEl.value; };
+motionEl.oninput = () => { S.motion = +motionEl.value / 100; motionV.textContent = motionEl.value; };
+
+const panel = document.getElementById('panel');
+window.addEventListener('keydown', (e) => {
+  if (e.code === 'Space') { e.preventDefault(); setPlaying(!S.playing); }
+  else if (e.key === 't' || e.key === 'T') realBtn.click();
+  else if (e.key === 'l' || e.key === 'L') lapseBtn.click();
+  else if (e.key === 'h' || e.key === 'H') panel.classList.toggle('hidden');
+});
+
+// Three slow cloud bands at different depths → parallax drift = constant life.
+const CLOUDS = [
+  { y: 0.30, w: 0.52, th: 46, sp: 5.5, seed: 0.1 },
+  { y: 0.46, w: 0.66, th: 38, sp: 9.0, seed: 0.6 },
+  { y: 0.60, w: 0.80, th: 30, sp: 15.0, seed: 0.35 },
+];
+
+// ── render loop ───────────────────────────────────────────────────────────
+let last = performance.now();
+function frame(now) {
+  const dt = Math.min(0.05, (now - last) / 1000); last = now;
+  S.t += dt;
+
+  if (S.realtime) { const d = new Date(); setHour(d.getHours() + d.getMinutes() / 60 + d.getSeconds() / 3600); }
+  else if (S.lapse) setHour(S.hour + (24 / LAPSE_SECS) * dt);
+
+  const sky = skyAt(S.hour);
+  const bd = body(S.hour);
+  const horY = H * HORIZON;
+  const mo = 0.25 + S.motion * 1.5;     // micro-motion multiplier
+
+  clockEl.firstChild.nodeValue = fmtClock(S.hour);
+  phaseEl.textContent = phaseName(S.hour);
+
+  // 1) Sky — vertical gradient, top → horizon band.
+  const sg = ctx.createLinearGradient(0, 0, 0, horY);
+  sg.addColorStop(0, mix3(sky.top, sky.top, 0));
+  sg.addColorStop(0.62, mix3(sky.top, sky.hor, 0.62));
+  sg.addColorStop(1, mix3(sky.hor, sky.glow, 0.35));
+  ctx.fillStyle = sg; ctx.fillRect(0, 0, W, horY);
+
+  // 2) Water — the sky, dimmed and deepened, mirrored below the line.
+  const wg = ctx.createLinearGradient(0, horY, 0, H);
+  wg.addColorStop(0, rgba(lerp3(sky.hor, sky.top, 0.3), 0.9));
+  wg.addColorStop(1, rgba(lerp3(sky.top, [4, 4, 9], 0.6), 1));
+  ctx.fillStyle = wg; ctx.fillRect(0, horY, W, H - horY);
+
+  // 3) Stars — fade in with nightness, twinkle, very slow drift.
+  if (sky.star > 0.01) {
+    for (const st of STARS) {
+      const tw = 0.35 + 0.65 * (0.5 + 0.5 * Math.sin(S.t * st.spd * mo + st.ph));
+      const x = ((st.x + S.t * 0.0015 * mo) % 1) * W;
+      const y = st.y * horY * 0.92;
+      ctx.fillStyle = `rgba(228,232,245,${sky.star * tw * 0.9})`;
+      ctx.beginPath(); ctx.arc(x, y, st.r, 0, Math.PI * 2); ctx.fill();
+    }
+  }
+
+  // 4) Atmospheric bloom — the body's light bleeding into the sky. Largest and
+  //    warmest near the horizon (golden hour), tight + pale at noon.
+  const bx = lerp(W * 0.16, W * 0.84, bd.x);
+  const by = horY - bd.alt * (horY * ARC);
+  const low = 1 - bd.alt;                       // 1 when on the horizon
+  const bloomR = lerp(W * 0.22, W * 0.6, low) * (1 + 0.05 * Math.sin(S.t * 0.5 * mo));
+  const bloom = ctx.createRadialGradient(bx, by, 0, bx, by, bloomR);
+  bloom.addColorStop(0, rgba(sky.glow, 0.5 * sky.light));
+  bloom.addColorStop(0.4, rgba(sky.glow, 0.16 * sky.light));
+  bloom.addColorStop(1, rgba(sky.glow, 0));
+  ctx.fillStyle = bloom; ctx.fillRect(0, 0, W, horY + 2);
+
+  // 5) Cloud bands — soft, low-alpha, drifting; catch the glow colour.
+  for (const cl of CLOUDS) {
+    const cy = cl.y * horY;
+    const ccol = lerp3(lerp3(sky.top, sky.hor, cl.y), sky.glow, 0.3 + low * 0.3);
+    const cx = ((cl.seed * (W + W * cl.w) + S.t * cl.sp * mo) % (W + W * cl.w)) - W * cl.w;
+    const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, W * cl.w);
+    const a = (0.05 + 0.06 * sky.light) * S.cloud;
+    g.addColorStop(0, rgba(ccol, a));
+    g.addColorStop(1, rgba(ccol, 0));
+    ctx.save(); ctx.translate(cx, cy); ctx.scale(1, cl.th / (W * cl.w)); ctx.translate(-cx, -cy);
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(cx, cy, W * cl.w, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+  }
+
+  // 6) Reflection — a wavering luminous column under the body, on the water.
+  if (bd.alt >= 0) {
+    const refA = (0.10 + 0.16 * low) * sky.light;
+    const bodyCol = bd.kind === 'sun' ? lerp3(sky.glow, [255, 244, 224], 0.5) : [226, 232, 244];
+    for (let y = horY; y < H; y += 3) {
+      const k = (y - horY) / (H - horY);
+      const wob = Math.sin(S.t * 1.6 * mo + k * 9) * (3 + k * 14) * mo;
+      const w = lerp(10, 34, k) * (1 + 0.3 * Math.sin(S.t * 2 + k * 6));
+      ctx.fillStyle = rgba(bodyCol, refA * (1 - k) * (1 - k));
+      ctx.fillRect(bx + wob - w / 2, y, w, 3);
+    }
+  }
+
+  // 7) The body — a soft luminous disc (material light, not a neon dot).
+  const isSun = bd.kind === 'sun';
+  const bodyCol = isSun ? lerp3(sky.glow, [255, 246, 228], 0.55) : [228, 233, 244];
+  const br = isSun ? lerp(13, 9, bd.alt) : 7;        // sun swells near the horizon
+  ctx.save();
+  ctx.shadowColor = rgba(bodyCol, 0.6 * sky.light);
+  ctx.shadowBlur = lerp(26, 46, low) * (1 + 0.08 * Math.sin(S.t * 0.9 * mo));
+  ctx.fillStyle = rgba(bodyCol, isSun ? 0.95 : 0.8 * (0.4 + sky.star * 0.6));
+  ctx.beginPath(); ctx.arc(bx, by, br, 0, Math.PI * 2); ctx.fill();
+  ctx.restore();
+
+  // 8) Horizon line — one thin luminous stroke across the whole frame.
+  ctx.save();
+  ctx.strokeStyle = rgba(lerp3(sky.glow, [255, 255, 255], 0.2), 0.18 + 0.14 * sky.light);
+  ctx.lineWidth = 1;
+  ctx.shadowColor = rgba(sky.glow, 0.5 * sky.light); ctx.shadowBlur = 12;
+  ctx.beginPath(); ctx.moveTo(0, horY); ctx.lineTo(W, horY); ctx.stroke();
+  ctx.restore();
+
+  // 9) Lyric — only when "playing". Sits just above the horizon, quiet warm
+  //    off-white with a legibility shadow (NOT a glow). Apple-Music restraint.
+  if (S.playing) {
+    S.lyricT += dt;
+    if (S.lyricT > 3.6) { S.lyricT = 0; S.lyricIdx = (S.lyricIdx + 1) % LYRICS.length; }
+    const intro = smoothstep(0, 0.5, S.lyricT) * smoothstep(3.6, 3.1, S.lyricT);
+    ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
+    ctx.font = `500 19px -apple-system, "PingFang SC", system-ui, sans-serif`;
+    ctx.fillStyle = `rgba(247,244,240,${0.92 * intro})`;
+    ctx.shadowColor = 'rgba(0,0,0,0.5)'; ctx.shadowBlur = 10;
+    ctx.fillText(LYRICS[S.lyricIdx], W / 2, horY - 26);
+    ctx.shadowBlur = 0;
+  }
+
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

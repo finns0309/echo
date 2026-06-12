@@ -38,6 +38,29 @@
          typing-dots scaffold on first activation. -->
     <div id="convo"></div>
 
+    <!-- Furin layer (风铃). JS lazily builds the chime scaffold on first
+         activation; physics + strike rings live in furin.js. -->
+    <div id="furin"></div>
+
+    <!-- Ticket layer (镭射票). JS lazily builds the holo ticket on first
+         activation; tilt physics + foil light live in ticket.js. -->
+    <div id="ticket"></div>
+
+    <!-- Roam layer (漫游). Empty by default; FL_ROAM.spawn() stages one
+         .rm-line per lyric change while data-layout="roam". Lines play their
+         choreography and self-remove on animationend. -->
+    <div id="roam"></div>
+
+    <!-- Eva layer (新世纪). JS lazily builds the terminal scaffold on first
+         activation; title cards + lock-on + A.T. field live in eva.js. -->
+    <div id="eva"></div>
+
+    <!-- Shinkai layer (云隙). Time-of-day sky; built lazily by shinkai.js. -->
+    <div id="shinkai"></div>
+
+    <!-- Idol layer (星瞳). Penlight-sea stage; built lazily by idol.js. -->
+    <div id="idol"></div>
+
     <div id="toast"></div>
 
     <script src="themes.js"></script>
@@ -47,6 +70,16 @@
     <script src="danmaku.js"></script>
     <script src="conversation.js"></script>
     <script src="audio.js"></script>
+    <script src="textpick.js"></script>
+    <!-- furin.js / ticket.js / roam.js register onset handlers with FL_AUDIO
+         at load — keep them after audio.js and before app.js (which drives
+         their per-frame hooks). -->
+    <script src="furin.js"></script>
+    <script src="ticket.js"></script>
+    <script src="roam.js"></script>
+    <script src="eva.js"></script>
+    <script src="shinkai.js"></script>
+    <script src="idol.js"></script>
     <script src="app.js"></script>
   </body>
 </html>

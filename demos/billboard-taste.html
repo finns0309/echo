@@ -1,0 +1,424 @@
+<!doctype html>
+<!-- billboard-taste.html — 静态口味校对,不是主题实现。
+
+     要验证的命题:赛博朋克的"贵",来自把广告牌当作一个真实地方的真实物体
+     (结构、配重、电缆、维保贴纸、烧屏、坏点列),而不是来自高饱和渐变和
+     持续抖动的 glitch。所以这页的纪律是:
+
+       · 画面默认是【稳定】的——毛刺是稀有事件(8~22s 一次,持续 <150ms)
+       · 饱和度配给制:整页只有一个暖色(琥珀)和一个红(LIVE/航空灯)
+       · 瑕疵全部是结构性的:坏点列、卡亮像素、模块色差、上一句的烧屏残影
+       · 光要有行为:屏面溢光打在桁架上、空气里有薄雾锥、远处虚焦灯点
+       · 排印像真实广告:粗黑体主文案 + 法务小字 + 广告位编号 + 跑马灯
+       · 没有 techno 字体,没有假名乱贴,没有紫粉渐变 -->
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<title>billboard · taste check</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body { height: 100%; overflow: hidden; }
+body {
+  background: #04060a;
+  font-family: "PingFang SC", "Hiragino Sans GB", "Noto Sans CJK SC", -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── 夜气:冷暖两团环境光 + 颗粒 ──────────────────────────── */
+#air {
+  position: fixed; inset: 0;
+  background:
+    radial-gradient(130% 100% at 72% 24%, rgba(24, 46, 58, 0.30), transparent 55%),
+    radial-gradient(90% 70% at 16% 90%, rgba(36, 26, 44, 0.26), transparent 60%);
+}
+#grain {
+  position: fixed; inset: 0; opacity: 0.05; pointer-events: none;
+  background-image: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="160" height="160"><filter id="n"><feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2"/></filter><rect width="160" height="160" filter="url(%23n)" opacity="0.6"/></svg>');
+}
+
+/* 远处的城市:虚焦灯点,集中在左下远景 */
+#bokeh { position: fixed; inset: 0; filter: blur(7px); }
+#bokeh i { position: absolute; border-radius: 50%; }
+.b1  { left: 6%;  bottom: 12%; width: 14px; height: 14px; background: rgba(255, 157, 77, 0.42); }
+.b2  { left: 11%; bottom: 9%;  width: 8px;  height: 8px;  background: rgba(255, 157, 77, 0.30); }
+.b3  { left: 17%; bottom: 14%; width: 10px; height: 10px; background: rgba(88, 212, 224, 0.30); }
+.b4  { left: 24%; bottom: 7%;  width: 6px;  height: 6px;  background: rgba(235, 245, 250, 0.25); }
+.b5  { left: 31%; bottom: 11%; width: 12px; height: 12px; background: rgba(255, 90, 77, 0.22); }
+.b6  { left: 38%; bottom: 6%;  width: 7px;  height: 7px;  background: rgba(255, 157, 77, 0.20); }
+.b7  { left: 45%; bottom: 9%;  width: 9px;  height: 9px;  background: rgba(88, 212, 224, 0.16); }
+.b8  { left: 3%;  bottom: 22%; width: 7px;  height: 7px;  background: rgba(235, 245, 250, 0.16); }
+.b9  { left: 53%; bottom: 5%;  width: 8px;  height: 8px;  background: rgba(255, 200, 120, 0.14); }
+.b10 { left: 21%; bottom: 19%; width: 5px;  height: 5px;  background: rgba(255, 90, 77, 0.18); }
+
+/* 楼体剪影:广告牌挂靠的建筑,几扇没睡的窗 */
+#building {
+  position: fixed; right: 0; top: 0; width: 130px; height: 100%;
+  background: linear-gradient(270deg, #0b0f15 60%, rgba(11, 15, 21, 0));
+}
+#building i { position: absolute; width: 4px; height: 6px; background: rgba(255, 190, 120, 0.13); }
+#building .w1 { right: 28px; top: 64%; }
+#building .w2 { right: 52px; top: 71%; }
+#building .w3 { right: 36px; top: 83%; }
+
+/* ── 场景:一点透视,整套钢架+屏体一起转 ─────────────────── */
+#scene {
+  position: fixed; inset: 0;
+  perspective: 1500px; perspective-origin: 36% 42%;
+}
+#rig {
+  position: absolute; right: 3vw; top: 9vh;
+  transform: rotateY(-6.5deg) rotateX(1.2deg);
+  transform-style: preserve-3d;
+}
+
+/* 桁架:广告牌的脊柱,屏光会打亮它朝屏的一侧 */
+#truss {
+  position: absolute; right: -34px; top: -14vh; width: 44px; height: 120vh;
+  background:
+    repeating-linear-gradient(45deg,  rgba(130, 150, 160, 0.10) 0 2px, transparent 2px 13px),
+    repeating-linear-gradient(-45deg, rgba(130, 150, 160, 0.10) 0 2px, transparent 2px 13px),
+    linear-gradient(90deg, #10151b, #1a222b 35%, #0b0f14);
+  box-shadow: inset 0 0 0 1px rgba(160, 180, 190, 0.07);
+}
+#truss::after { /* 屏面溢光:光打在结构上,才说明光是真的 */
+  content: ""; position: absolute; inset: 0;
+  background: linear-gradient(90deg, rgba(110, 215, 232, 0.10), transparent 65%);
+}
+.arm {
+  position: absolute; right: -30px; width: 64px; height: 9px;
+  background: linear-gradient(180deg, #1a2129, #0a0e12);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+.arm::before, .arm::after { /* 铆点 */
+  content: ""; position: absolute; top: 2px; width: 3px; height: 3px; border-radius: 50%;
+  background: #2c353e; box-shadow: inset 0 -1px 1px rgba(0, 0, 0, 0.7);
+}
+.arm::before { left: 7px; } .arm::after { right: 9px; }
+.arm-t { top: 88px; } .arm-b { top: 368px; }
+
+/* 航空障碍灯:慢呼吸,城市夜空的标点 */
+#lamp {
+  position: absolute; right: -16px; top: -7vh; width: 6px; height: 6px; border-radius: 50%;
+  background: #ff3b30; animation: lamp 4.4s ease-in-out infinite;
+}
+@keyframes lamp {
+  0%, 100% { opacity: 0.35; box-shadow: 0 0 6px 1px rgba(255, 59, 48, 0.25); }
+  50%      { opacity: 1;    box-shadow: 0 0 14px 3px rgba(255, 59, 48, 0.45); }
+}
+
+/* 馈线:从楼里垂下来,带一个接线盒 */
+#cables { position: absolute; left: 110px; top: -150px; overflow: visible; }
+#cables path { fill: none; }
+#jbox {
+  position: absolute; left: 388px; top: -14px; width: 26px; height: 14px; border-radius: 2px;
+  background: linear-gradient(180deg, #1c232b, #0d1116);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+#jbox::after { /* 工作指示灯,绿色,常亮微闪 */
+  content: ""; position: absolute; right: 4px; top: 5px; width: 3px; height: 3px; border-radius: 50%;
+  background: #43d17c; box-shadow: 0 0 5px rgba(67, 209, 124, 0.6);
+  animation: jled 7s steps(1) infinite;
+}
+@keyframes jled { 0%, 92%, 96%, 100% { opacity: 1; } 94% { opacity: 0.2; } }
+
+/* ── 屏体:外框是物体,屏面是光 ───────────────────────────── */
+#board {
+  position: relative; width: 796px; height: 466px; padding: 18px;
+  border-radius: 6px;
+  background: linear-gradient(180deg, #1b2026, #0e1217 55%, #090c10);
+  box-shadow:
+    0 34px 90px -24px rgba(0, 0, 0, 0.85),
+    inset 0 1px 0 rgba(255, 255, 255, 0.07),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.6);
+}
+.screw {
+  position: absolute; width: 7px; height: 7px; border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #39434c, #10151a 72%);
+  box-shadow: inset 0 -1px 1px rgba(0, 0, 0, 0.8), 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+.s1 { left: 6px; top: 6px; } .s2 { right: 6px; top: 6px; }
+.s3 { left: 6px; bottom: 6px; } .s4 { right: 6px; bottom: 6px; }
+#rust { /* 底部螺丝淌下来的一道锈 */
+  position: absolute; left: 9px; bottom: -22px; width: 2px; height: 22px;
+  background: linear-gradient(180deg, rgba(140, 82, 44, 0.35), transparent);
+}
+#sticker { /* 维保贴纸:广告牌的户口本 */
+  position: absolute; right: 26px; bottom: 3px; transform: rotate(-0.8deg);
+  display: flex; align-items: center; gap: 5px;
+  padding: 2px 6px; border: 1px solid rgba(200, 220, 225, 0.16);
+  background: rgba(10, 14, 17, 0.7);
+  font-size: 7px; letter-spacing: 1px; color: rgba(200, 220, 225, 0.42);
+}
+#sticker b { /* 条码 */
+  width: 22px; height: 7px;
+  background: repeating-linear-gradient(90deg, rgba(200, 220, 225, 0.5) 0 1px, transparent 1px 3px, rgba(200, 220, 225, 0.5) 3px 4px, transparent 4px 6px);
+}
+
+#screen {
+  position: relative; width: 760px; height: 430px; overflow: hidden; border-radius: 2px;
+  background: radial-gradient(140% 120% at 22% 0%, #0d2530 0%, #07121a 45%, #04090e 100%);
+  box-shadow:
+    inset 0 0 46px rgba(0, 0, 0, 0.55),
+    0 0 80px 4px rgba(80, 200, 220, 0.13),
+    0 0 300px 40px rgba(70, 180, 210, 0.06);
+}
+
+/* 烧屏:上一句歌词的残影——这块屏的"歌词历史",也是它的工龄 */
+#burn {
+  position: absolute; left: 42px; top: 116px;
+  font-size: 62px; font-weight: 800; letter-spacing: 3px;
+  color: rgba(170, 235, 245, 0.05); filter: blur(0.7px);
+  white-space: nowrap; user-select: none;
+}
+
+/* 暗纹水印:一个描边大字,广告排版的占位图形 */
+#wm {
+  position: absolute; right: 48px; top: 26px;
+  font-size: 240px; font-weight: 800; line-height: 1;
+  color: transparent; -webkit-text-stroke: 1px rgba(150, 230, 245, 0.06);
+  user-select: none;
+}
+
+/* 滚动干扰带:慢、淡——信号在呼吸,不在抽搐 */
+#band {
+  position: absolute; left: 0; right: 0; top: -140px; height: 110px;
+  background: linear-gradient(180deg, transparent, rgba(170, 240, 255, 0.045) 45%, rgba(170, 240, 255, 0.015) 62%, transparent);
+  animation: band 13s linear infinite;
+}
+@keyframes band { to { transform: translateY(700px); } }
+
+/* ── 屏面内容:这块板被盗播了一个音乐频道 ─────────────────── */
+#content { position: absolute; inset: 0; padding: 26px 34px; color: #e8fbff; }
+
+#topbar { display: flex; align-items: center; font-size: 11px; letter-spacing: 2px; }
+#live {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 3px 9px; border: 1px solid rgba(255, 255, 255, 0.22);
+  font-weight: 600;
+}
+#live i {
+  width: 6px; height: 6px; border-radius: 50%; background: #ff3b30;
+  box-shadow: 0 0 6px rgba(255, 59, 48, 0.7);
+  animation: blink 1.4s steps(1) infinite;
+}
+@keyframes blink { 0%, 70%, 100% { opacity: 1; } 78%, 92% { opacity: 0.15; } }
+#chan { margin-left: 12px; opacity: 0.5; }
+#topbar .sp { flex: 1; }
+#bars { display: inline-flex; align-items: flex-end; gap: 2px; margin-right: 10px; }
+#bars i { width: 3px; background: #cfeef2; }
+#bars i:nth-child(1) { height: 5px; }
+#bars i:nth-child(2) { height: 8px; }
+#bars i:nth-child(3) { height: 11px; }
+#bars i:nth-child(4) { height: 14px; opacity: 0.22; } /* 信号差一格,故事感 */
+#clk { font-variant-numeric: tabular-nums; opacity: 0.75; }
+
+#main {
+  position: absolute; left: 42px; top: 116px;
+  font-size: 62px; font-weight: 800; letter-spacing: 3px; white-space: nowrap;
+  text-shadow:
+    0 0 22px rgba(150, 235, 250, 0.30),
+    0 0 64px rgba(110, 210, 235, 0.16),
+    1.5px 0 0 rgba(255, 70, 120, 0.10),
+    -1.5px 0 0 rgba(80, 220, 255, 0.12); /* 色散只敢给一发丝 */
+}
+#rule {
+  position: absolute; left: 44px; top: 208px; width: 320px; height: 1px;
+  background: linear-gradient(90deg, rgba(170, 240, 250, 0.4), transparent);
+}
+#sub {
+  position: absolute; left: 44px; top: 222px;
+  font-size: 13px; letter-spacing: 1.5px; opacity: 0.46;
+}
+#sub b { font-weight: 600; opacity: 0.8; margin-right: 8px; }
+
+/* 广告主落款:全页唯一的暖色块 */
+#brand { position: absolute; right: 34px; bottom: 46px; text-align: right; }
+#brand .zh { font-size: 17px; font-weight: 600; letter-spacing: 6px; color: rgba(255, 177, 77, 0.82); }
+#brand .en { margin-top: 3px; font-size: 8px; letter-spacing: 3px; color: rgba(255, 177, 77, 0.38); }
+
+/* 法务小字:竖排,真实广告牌的边角料 */
+#legal {
+  position: absolute; right: 12px; top: 58px;
+  writing-mode: vertical-rl; font-size: 8px; letter-spacing: 2px;
+  color: rgba(200, 235, 240, 0.20);
+}
+
+/* 跑马灯:频道自己的口播 */
+#ticker {
+  position: absolute; left: 0; right: 0; bottom: 0; height: 30px; overflow: hidden;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.22), rgba(0, 0, 0, 0.46));
+}
+#ticker .tk {
+  position: absolute; left: 0; top: 0; height: 30px;
+  display: flex; align-items: center; white-space: nowrap;
+  font-size: 11px; letter-spacing: 1.5px; color: rgba(207, 238, 242, 0.72);
+  animation: tick 30s linear infinite;
+}
+#ticker .tk span { padding-right: 60px; }
+@keyframes tick { to { transform: translateX(-50%); } }
+
+/* ── 结构性瑕疵:屏的工龄写在脸上 ─────────────────────────── */
+#deadcol { /* 一列坏点 */
+  position: absolute; left: 524px; top: 0; bottom: 0; width: 2px;
+  background: rgba(0, 0, 0, 0.5);
+}
+.stuck { position: absolute; width: 2px; height: 2px; } /* 卡亮像素 */
+.p1 { left: 213px; top: 322px; background: rgba(255, 80, 90, 0.55); }
+.p2 { left: 641px; top: 88px;  background: rgba(235, 250, 255, 0.5); }
+#modules { /* LED 箱体拼缝 + 一块色温不齐的模块 */
+  position: absolute; inset: 0;
+  background:
+    repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.022) 0 1px, transparent 1px 95px),
+    repeating-linear-gradient(0deg,  rgba(255, 255, 255, 0.018) 0 1px, transparent 1px 86px);
+}
+#offmod {
+  position: absolute; left: 285px; top: 172px; width: 95px; height: 86px;
+  background: rgba(140, 225, 238, 0.030);
+}
+#led { /* 像素网格 */
+  position: absolute; inset: 0;
+  background:
+    radial-gradient(circle at 1.5px 1.5px, transparent 0.9px, rgba(0, 0, 0, 0.16) 1.1px),
+    repeating-linear-gradient(90deg, rgba(255, 80, 90, 0.022) 0 1px, rgba(90, 255, 140, 0.018) 1px 2px, rgba(90, 150, 255, 0.022) 2px 3px);
+  background-size: 3px 3px, 3px 100%;
+}
+#glare { /* 亚克力面罩的反光 + 两道干涸的雨痕 */
+  position: absolute; inset: 0;
+  background:
+    linear-gradient(115deg, transparent 40%, rgba(255, 255, 255, 0.040) 46%, rgba(255, 255, 255, 0.010) 52%, transparent 57%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.018), transparent 70px) 188px 0 / 2px 100% no-repeat,
+    linear-gradient(180deg, rgba(255, 255, 255, 0.013), transparent 110px) 462px 0 / 1px 100% no-repeat;
+}
+
+/* 偶发毛刺:整屏一沉,内容错半像素——像电压不稳,不像滤镜 */
+#screen.flick #content, #screen.flick #burn, #screen.flick #wm { filter: brightness(0.74) contrast(1.05); }
+#screen.flick #content { transform: translateX(0.7px); }
+#screen.flick #band { opacity: 2.4; }
+
+/* 空气里的薄雾锥:屏光照亮的潮气 */
+#haze {
+  position: absolute; left: -300px; top: -140px; width: 1300px; height: 900px; z-index: -1;
+  background: radial-gradient(48% 40% at 46% 36%, rgba(90, 200, 220, 0.085), rgba(90, 200, 220, 0.028) 55%, transparent 72%);
+  filter: blur(6px);
+}
+
+#note {
+  position: fixed; left: 18px; bottom: 14px;
+  font-size: 11px; letter-spacing: 1px; color: rgba(160, 190, 200, 0.26);
+}
+
+@media (max-width: 1180px) {
+  #rig { transform: rotateY(-6.5deg) rotateX(1.2deg) scale(0.78); transform-origin: right top; }
+}
+</style>
+</head>
+<body>
+
+<div id="air"></div>
+<div id="bokeh">
+  <i class="b1"></i><i class="b2"></i><i class="b3"></i><i class="b4"></i><i class="b5"></i>
+  <i class="b6"></i><i class="b7"></i><i class="b8"></i><i class="b9"></i><i class="b10"></i>
+</div>
+<div id="building"><i class="w1"></i><i class="w2"></i><i class="w3"></i></div>
+<div id="grain"></div>
+
+<div id="scene">
+  <div id="rig">
+    <div id="haze"></div>
+    <div id="truss"></div>
+    <div class="arm arm-t"></div>
+    <div class="arm arm-b"></div>
+    <div id="lamp"></div>
+
+    <svg id="cables" width="560" height="170" viewBox="0 0 560 170">
+      <path d="M 560 -10 C 470 80, 410 118, 300 132" stroke="#0c1014" stroke-width="3"/>
+      <path d="M 560 -10 C 470 80, 410 118, 300 132" stroke="rgba(150,190,200,0.10)" stroke-width="1"/>
+      <path d="M 560 8 C 480 96, 420 132, 302 142" stroke="#0b0e12" stroke-width="2.2"/>
+    </svg>
+    <div id="jbox"></div>
+
+    <div id="board">
+      <b class="screw s1"></b><b class="screw s2"></b><b class="screw s3"></b><b class="screw s4"></b>
+      <div id="rust"></div>
+
+      <div id="screen">
+        <div id="burn">电流声里有你的名字</div>
+        <div id="wm">眠</div>
+        <div id="band"></div>
+
+        <div id="content">
+          <div id="topbar">
+            <span id="live"><i></i>LIVE</span>
+            <span id="chan">盗播 · CH 88.7</span>
+            <span class="sp"></span>
+            <span id="bars"><i></i><i></i><i></i><i></i></span>
+            <span id="clk">23:47</span>
+          </div>
+
+          <div id="main">整座城市替我失眠</div>
+          <div id="rule"></div>
+          <div id="sub"><b>NEXT</b>而你在信号那头醒着</div>
+
+          <div id="brand">
+            <div class="zh">回聲電器</div>
+            <div class="en">ECHO DENKI · 屋外広告</div>
+          </div>
+
+          <div id="legal">屏体 HX-P39 · 5500nit · 维保时段 03:00–04:00</div>
+
+          <div id="ticker">
+            <div class="tk">
+              <span>NOW PLAYING ─ 《失眠都市》 unknown artist · 320kbps</span>
+              <span>广告位 №3F-N 续费截止 06/15</span>
+              <span>本频道为非授权转播 · 若见闪烁请勿报修</span>
+              <span>NOW PLAYING ─ 《失眠都市》 unknown artist · 320kbps</span>
+              <span>广告位 №3F-N 续费截止 06/15</span>
+              <span>本频道为非授权转播 · 若见闪烁请勿报修</span>
+            </div>
+          </div>
+        </div>
+
+        <div id="deadcol"></div>
+        <b class="stuck p1"></b><b class="stuck p2"></b>
+        <div id="offmod"></div>
+        <div id="modules"></div>
+        <div id="led"></div>
+        <div id="glare"></div>
+      </div>
+
+      <div id="sticker">广告位 №3F-N · 沪屏备2077-0309<b></b></div>
+    </div>
+  </div>
+</div>
+
+<div id="note">静态 taste check · 偶发闪烁与跑马灯为氛围采样,非最终主题</div>
+
+<script>
+// 时钟:真实时间,广告牌的呼吸之一
+const clk = document.getElementById('clk');
+function tick() {
+  const d = new Date();
+  clk.textContent = String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+}
+tick(); setInterval(tick, 30000);
+
+// 毛刺:稀有、短促、不规律——电压不稳,不是滤镜循环
+const screen = document.getElementById('screen');
+(function flick() {
+  setTimeout(() => {
+    screen.classList.add('flick');
+    setTimeout(() => screen.classList.remove('flick'), 70 + Math.random() * 80);
+    if (Math.random() < 0.3) { // 偶尔补一下,像接触不良
+      setTimeout(() => {
+        screen.classList.add('flick');
+        setTimeout(() => screen.classList.remove('flick'), 50);
+      }, 230);
+    }
+    flick();
+  }, 8000 + Math.random() * 14000);
+})();
+</script>
+
+</body>
+</html>

@@ -1,0 +1,329 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>echo · 呼吸摆件 原型</title>
+<style>
+  :root { color-scheme: dark; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 100%; height: 100%; overflow: hidden; }
+  body {
+    /* a dimensional dark "room", not a #000 void */
+    background:
+      radial-gradient(135% 115% at 50% 30%, #16151b 0%, #100f14 50%, #0a090d 100%);
+    font: 13px/1.5 -apple-system, "PingFang SC", "Hiragino Sans", system-ui, sans-serif;
+    color: #fff;
+  }
+  /* width/height:100% is REQUIRED — without it a canvas is laid out at its
+     width/height ATTRIBUTE size (W×DPR), so on retina it renders at 2× and the
+     drawing centre lands off-screen bottom-right. */
+  #c { position: fixed; inset: 0; width: 100%; height: 100%; display: block; z-index: 0; }
+  /* soft vignette to seat the light + faint film grain to kill the digital void */
+  #vignette { position: fixed; inset: 0; z-index: 1; pointer-events: none;
+    background: radial-gradient(125% 105% at 50% 44%, transparent 52%, rgba(0,0,0,0.5) 100%); }
+  #grain { position: fixed; inset: 0; z-index: 2; pointer-events: none; opacity: 0.04;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"); }
+
+  /* ── control panel (collapsible — press H) ───────────────────────────── */
+  #panel {
+    position: fixed; left: 18px; bottom: 18px; z-index: 10;
+    width: 268px; padding: 14px 16px 16px;
+    background: rgba(20, 20, 26, 0.62);
+    backdrop-filter: blur(20px) saturate(1.4);
+    -webkit-backdrop-filter: blur(20px) saturate(1.4);
+    border: 0.5px solid rgba(255, 255, 255, 0.1);
+    border-radius: 16px;
+    box-shadow: 0 18px 50px -20px rgba(0, 0, 0, 0.7);
+    user-select: none;
+    transition: opacity 240ms ease, transform 240ms ease;
+  }
+  #panel.hidden { opacity: 0; transform: translateY(8px); pointer-events: none; }
+  #panel h1 { font-size: 12px; font-weight: 600; letter-spacing: 0.3px; opacity: 0.9; margin-bottom: 2px; }
+  #panel .sub { font-size: 10.5px; opacity: 0.42; margin-bottom: 12px; }
+  .row { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
+  .row label { width: 40px; font-size: 11px; opacity: 0.6; flex: none; }
+  .row input[type=range] { flex: 1; accent-color: #c9a6ff; height: 3px; }
+  .row .val { width: 30px; text-align: right; font-variant-numeric: tabular-nums; font-size: 10.5px; opacity: 0.55; }
+  .btns { display: flex; gap: 6px; margin-top: 6px; flex-wrap: wrap; }
+  button {
+    font: inherit; font-size: 11.5px; color: #fff;
+    background: rgba(255, 255, 255, 0.07);
+    border: 0.5px solid rgba(255, 255, 255, 0.12);
+    border-radius: 9px; padding: 6px 11px; cursor: pointer;
+    transition: background 140ms ease, transform 100ms ease;
+  }
+  button:hover { background: rgba(255, 255, 255, 0.13); }
+  button:active { transform: scale(0.94); }
+  button.primary { background: rgba(170, 130, 255, 0.28); border-color: rgba(170, 130, 255, 0.4); }
+  button.on { background: rgba(120, 230, 150, 0.24); border-color: rgba(120, 230, 150, 0.4); }
+  .hint { margin-top: 12px; font-size: 10px; opacity: 0.34; line-height: 1.6; }
+  kbd { font: inherit; font-size: 9.5px; padding: 1px 4px; border-radius: 4px;
+        background: rgba(255,255,255,0.1); border: 0.5px solid rgba(255,255,255,0.14); }
+</style>
+</head>
+<body>
+  <canvas id="c"></canvas>
+  <div id="vignette"></div>
+  <div id="grain"></div>
+
+  <div id="panel">
+    <h1>echo · 呼吸摆件 原型</h1>
+    <div class="sub">环呼吸 → 横向拉开 → 歌词带 → 鼓点波纹</div>
+
+    <div class="btns">
+      <button id="play" class="primary">▶ 播放</button>
+      <button data-preset="slow">慢歌</button>
+      <button data-preset="mid">中速</button>
+      <button data-preset="fast">快歌</button>
+      <button id="tap">· 敲一拍</button>
+    </div>
+
+    <div class="row"><label>疏密</label><input id="pace" type="range" min="0" max="100" value="35"><span class="val" id="paceV">35</span></div>
+    <div class="row"><label>能量</label><input id="energy" type="range" min="0" max="100" value="45"><span class="val" id="energyV">45</span></div>
+    <div class="row" style="margin-top:6px"><label>自动拍</label><button id="autobeat" class="on" style="flex:1">开</button></div>
+
+    <div class="hint">
+      疏密 → 呼吸速率 + 光晕色温(慢=冷靛蓝 · 快=暖橙红)<br>
+      能量 → 光晕大小 + 呼吸深浅 · 每拍荡一圈波纹<br>
+      <kbd>空格</kbd> 播放/停止 &nbsp; <kbd>B</kbd> 敲一拍 &nbsp; <kbd>H</kbd> 隐藏面板
+    </div>
+  </div>
+
+<script>
+// ─────────────────────────────────────────────────────────────────────────
+//  echo · breathing-ornament prototype
+//  Pure-canvas sketch of the product vision. Audio signals (pace = onset
+//  density, energy = RMS, beats = onsets) are SIMULATED via the panel so we
+//  can feel the motion before wiring the real spectrum engine. No app code.
+// ─────────────────────────────────────────────────────────────────────────
+const cv = document.getElementById('c');
+const ctx = cv.getContext('2d');
+let W = 0, H = 0, DPR = 1;
+function resize() {
+  DPR = Math.min(window.devicePixelRatio || 1, 2);
+  W = window.innerWidth; H = window.innerHeight;
+  cv.width = Math.floor(W * DPR); cv.height = Math.floor(H * DPR);
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+}
+window.addEventListener('resize', resize); resize();
+
+// ── tunables ──────────────────────────────────────────────────────────────
+const BASE_R       = 46;      // ring cap radius at rest (css px)
+const OPEN_D       = 210;     // half-length of the straight section when fully open
+const REST_PERIOD  = 9000;    // ms per breath when idle / sparse
+const FAST_PERIOD  = 2500;    // ms per breath when dense (floor — never strobes)
+const SMOOTH       = 2.2;     // how fast displayed pace/energy ease toward targets (per s)
+
+// ── state ───────────────────────────────────────────────────────────────
+const S = {
+  playing: false,
+  morph: 0, morphTarget: 0,       // 0 = ring, 1 = open band
+  pace: 0.35, paceTarget: 0.35,   // 0..1  (onset density)
+  energy: 0.0, energyTarget: 0.0, // 0..1  (RMS)
+  breathPhase: 0,                 // radians
+  ripples: [],
+  beatClock: 0,
+  autobeat: true,
+  lyricIdx: 0, lyricT: 0,
+  lastHue: 250,
+};
+
+const LYRICS = [
+  '把回忆熬成一锅汤',
+  '在每个有星星的夜里',
+  'I found the quiet in the noise',
+  '风吹过的时候 我想起你',
+  'we are just echoes of a song',
+  '慢慢地 慢慢地 亮起来',
+];
+
+// ── helpers ───────────────────────────────────────────────────────────────
+const lerp  = (a, b, t) => a + (b - a) * t;
+const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
+const smoothstep = (e0, e1, x) => { const t = clamp((x - e0) / (e1 - e0), 0, 1); return t * t * (3 - 2 * t); };
+// easeOutBack — the elastic overshoot that gives the "pull-open" its snap.
+function easeOutBack(t) { const c1 = 1.70158, c3 = c1 + 1; return 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2); }
+
+// pace → soft TEMPERATURE-tinted light (not a saturated hue). Cool moonlight
+// white when calm, warm candlelight white when energetic — desaturated, like
+// real light, so it never reads as neon. Direct RGB lerp avoids passing through
+// saturated hues. Low saturation is the single biggest anti-cheap lever.
+function colorForPace(p) {
+  const COOL = [196, 212, 238], WARM = [244, 213, 178];
+  return [
+    Math.round(lerp(COOL[0], WARM[0], p)),
+    Math.round(lerp(COOL[1], WARM[1], p)),
+    Math.round(lerp(COOL[2], WARM[2], p)),
+  ];
+}
+
+// Build a capsule (stadium) path. d=0 → a circle of radius r; d>0 → a
+// horizontal capsule. Animating d from 0→OPEN_D IS the morph.
+function capsulePath(cx, cy, r, d) {
+  ctx.beginPath();
+  ctx.arc(cx + d, cy, r, -Math.PI / 2, Math.PI / 2);          // right cap (top→bottom)
+  ctx.arc(cx - d, cy, r, Math.PI / 2, Math.PI * 1.5);         // left cap (bottom→top), through leftmost
+  ctx.closePath();
+}
+
+function spawnRipple(strength) {
+  S.ripples.push({ age: 0, life: lerp(2.0, 3.0, S.energy), strength });
+  if (S.ripples.length > 8) S.ripples.shift();
+}
+
+// ── input ─────────────────────────────────────────────────────────────────
+const playBtn = document.getElementById('play');
+function setPlaying(on) {
+  S.playing = on;
+  S.morphTarget = on ? 1 : 0;
+  playBtn.textContent = on ? '⏹ 停止' : '▶ 播放';
+  playBtn.classList.toggle('on', on);
+  if (on) { S.lyricIdx = 0; S.lyricT = 0; }
+}
+playBtn.onclick = () => setPlaying(!S.playing);
+
+const paceEl = document.getElementById('pace'), paceV = document.getElementById('paceV');
+const energyEl = document.getElementById('energy'), energyV = document.getElementById('energyV');
+paceEl.oninput   = () => { S.paceTarget   = +paceEl.value / 100;   paceV.textContent   = paceEl.value; };
+energyEl.oninput = () => { S.energyTarget = +energyEl.value / 100; energyV.textContent = energyEl.value; };
+
+document.querySelectorAll('[data-preset]').forEach((b) => {
+  b.onclick = () => {
+    const presets = { slow: [18, 30], mid: [48, 55], fast: [82, 80] };
+    const [p, e] = presets[b.dataset.preset];
+    paceEl.value = p; energyEl.value = e;
+    S.paceTarget = p / 100; S.energyTarget = e / 100;
+    paceV.textContent = p; energyV.textContent = e;
+    if (!S.playing) setPlaying(true);
+  };
+});
+
+const tapBtn = document.getElementById('tap');
+tapBtn.onclick = () => spawnRipple(lerp(0.6, 1, S.energy));
+
+const autoBtn = document.getElementById('autobeat');
+autoBtn.onclick = () => { S.autobeat = !S.autobeat; autoBtn.textContent = S.autobeat ? '开' : '关'; autoBtn.classList.toggle('on', S.autobeat); };
+
+const panel = document.getElementById('panel');
+window.addEventListener('keydown', (e) => {
+  if (e.code === 'Space') { e.preventDefault(); setPlaying(!S.playing); }
+  else if (e.key === 'b' || e.key === 'B') spawnRipple(lerp(0.6, 1, S.energy));
+  else if (e.key === 'h' || e.key === 'H') panel.classList.toggle('hidden');
+});
+
+// ── render loop ─────────────────────────────────────────────────────────
+let last = performance.now();
+function frame(now) {
+  const dt = Math.min(0.05, (now - last) / 1000); last = now;
+
+  // Ease displayed pace/energy toward targets so changes feel like the song
+  // "settling" rather than snapping. At rest, energy falls toward 0.
+  const eT = S.playing ? S.energyTarget : 0;
+  const pT = S.playing ? S.paceTarget : Math.min(S.paceTarget, 0.12); // rest cools toward calm
+  S.pace   += (pT - S.pace) * Math.min(1, SMOOTH * dt);
+  S.energy += (eT - S.energy) * Math.min(1, SMOOTH * dt);
+
+  // Morph toward target with elastic overshoot on open.
+  const mSpeed = (S.morphTarget > S.morph ? 1.4 : 2.0); // open slower (savor it), close snappier
+  S.morphRaw = (S.morphRaw ?? 0) + (S.morphTarget - (S.morphRaw ?? 0)) * Math.min(1, mSpeed * dt);
+  S.morph = S.morphTarget >= (S.morphRaw ?? 0) ? easeOutBack(clamp(S.morphRaw, 0, 1)) : clamp(S.morphRaw, 0, 1);
+
+  // Breathing: period from pace, depth from energy.
+  const period = lerp(REST_PERIOD, FAST_PERIOD, S.pace) / 1000;
+  S.breathPhase += (dt / period) * Math.PI * 2;
+  const breath = Math.sin(S.breathPhase);                       // -1..1
+  const depth  = lerp(0.03, 0.10, S.energy);
+  const scale  = 1 + depth * breath;
+
+  // Geometry.
+  const cx = W / 2, cy = H * 0.46;
+  const r  = BASE_R * scale * lerp(1, 0.92, S.morph * 0.0);      // caps stay ~constant; band height ≈ ring
+  const d  = OPEN_D * clamp(S.morph, 0, 1.15);
+  const col = colorForPace(S.pace);
+
+  // Beat scheduler — auto ripples at a pace-derived interval (+ a slow self
+  // -ripple on each exhale when idle). Discipline: even fast songs stay calm.
+  S.beatClock += dt;
+  const interval = S.playing
+    ? lerp(1.15, 0.34, S.pace) * (S.autobeat ? 1 : 1e9)
+    : period * 0.5; // idle: one gentle ping per breath
+  if (S.beatClock >= interval) {
+    S.beatClock = 0;
+    if (S.playing && S.autobeat) spawnRipple(lerp(0.45, 0.95, S.energy) * (0.7 + Math.sin(S.breathPhase) * 0.3 + 0.3));
+    else if (!S.playing) spawnRipple(0.22);
+  }
+
+  // ── paint ────────────────────────────────────────────────────────────
+  // Everything is source-over (material light), NOT additive (neon bloom).
+  // Wide + soft + desaturated + low-contrast = a lamp; thin + bright + saturated
+  // + additive = a neon sign. We want the lamp.
+  ctx.clearRect(0, 0, W, H);
+  const [cr, cg, cb] = col;
+  const lvl = lerp(0.6, 1, S.energy);   // gentle overall intensity
+
+  // 1) Room glow — the light bleeding softly into the dark.
+  const washR = (300 + d) * (1 + 0.10 * breath);
+  const wash = ctx.createRadialGradient(cx, cy, r * 0.4, cx, cy, washR);
+  wash.addColorStop(0, `rgba(${cr},${cg},${cb},${0.055 * lvl})`);
+  wash.addColorStop(1, `rgba(${cr},${cg},${cb},0)`);
+  ctx.fillStyle = wash; ctx.fillRect(0, 0, W, H);
+
+  // 2) Soft luminous ring — a WIDE, low-alpha, heavily-blurred band. No hard edge.
+  ctx.save();
+  ctx.shadowColor = `rgba(${cr},${cg},${cb},${0.5 * lvl})`;
+  ctx.shadowBlur  = lerp(34, 60, S.energy) * (1 + 0.16 * breath);
+  ctx.strokeStyle = `rgba(${cr},${cg},${cb},${lerp(0.08, 0.14, S.energy)})`;
+  ctx.lineWidth   = lerp(13, 22, S.energy);
+  capsulePath(cx, cy, r, d); ctx.stroke();
+  ctx.restore();
+
+  // 3) A whisper of a brighter core — soft, still no neon edge.
+  ctx.save();
+  ctx.shadowColor = `rgba(${cr},${cg},${cb},${0.4 * lvl})`;
+  ctx.shadowBlur  = lerp(12, 20, S.energy);
+  ctx.strokeStyle = `rgba(${Math.min(255,cr+10)},${Math.min(255,cg+10)},${Math.min(255,cb+10)},${lerp(0.18, 0.28, S.energy)})`;
+  ctx.lineWidth   = lerp(3.5, 5, S.energy);
+  capsulePath(cx, cy, r, d); ctx.stroke();
+  ctx.restore();
+
+  // 4) Ripples — faint soft waves on dark water (source-over, low alpha).
+  for (let i = S.ripples.length - 1; i >= 0; i--) {
+    const rp = S.ripples[i];
+    rp.age += dt;
+    const k = rp.age / rp.life;
+    if (k >= 1) { S.ripples.splice(i, 1); continue; }
+    const grow = 1 + k * lerp(2.0, 3.2, rp.strength);
+    const a = (1 - k) * (1 - k) * 0.20 * rp.strength;
+    ctx.save();
+    ctx.strokeStyle = `rgba(${cr},${cg},${cb},${a})`;
+    ctx.lineWidth = lerp(6, 1.5, k);
+    ctx.shadowColor = `rgba(${cr},${cg},${cb},${a * 0.8})`;
+    ctx.shadowBlur = 18;
+    capsulePath(cx, cy, r * grow, d * lerp(1, 1.03, k)); ctx.stroke();
+    ctx.restore();
+  }
+
+  // 5) Lyrics — once the band opens. Clean warm off-white, faint legibility
+  //    shadow (NOT a colored glow). Apple-Music quiet, not karaoke.
+  const lyVis = smoothstep(0.45, 0.95, S.morph);
+  if (lyVis > 0.01) {
+    S.lyricT += dt;
+    if (S.lyricT > 3.4) { S.lyricT = 0; S.lyricIdx = (S.lyricIdx + 1) % LYRICS.length; }
+    const intro = smoothstep(0, 0.45, S.lyricT) * smoothstep(3.4, 3.0, S.lyricT);
+    const a = lyVis * (0.4 + 0.6 * intro);
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    const fs = (18 + 2 * breath) * lerp(0.92, 1, lyVis);
+    ctx.font = `500 ${fs}px -apple-system, "PingFang SC", system-ui, sans-serif`;
+    ctx.fillStyle = `rgba(247,244,240,${a * 0.92})`;
+    ctx.shadowColor = 'rgba(0,0,0,0.55)'; ctx.shadowBlur = 10;
+    ctx.fillText(LYRICS[S.lyricIdx], cx, cy);
+    ctx.shadowBlur = 0;
+  }
+
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

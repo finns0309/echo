@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<title>furin harness</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  :root {
+    --accent: #6ea8d8;
+    --accent-soft: rgba(110,168,216,0.55);
+    --accent-glow: rgba(110,168,216,0.45);
+    --fl-scale: 1.0;
+    --ease-out: cubic-bezier(0.2, 0.7, 0.2, 1);
+  }
+  /* Simulated desktop so the transparent glass + drop-shadows read like they
+     would hanging on a real wallpaper. */
+  html, body {
+    height: 100%;
+    background:
+      radial-gradient(120% 90% at 75% 8%, #3b4658 0%, #2b3340 55%, #20262f 100%);
+  }
+  #furin { display: block !important; }
+
+  /* ---- furin CSS, lifted verbatim from renderer/style.css (1080-1286) ---- */
+  body.theme-furin { box-shadow: none; border-radius: 0; }
+  #furin { position: absolute; inset: 0; z-index: 3; overflow: hidden; pointer-events: none; }
+  #furin .fr-anchor {
+    position: absolute; left: 50%; top: 0; width: 0; height: 0;
+    transform: scale(var(--fl-scale)); transform-origin: 0 0;
+    perspective: 1100px; perspective-origin: 0px 230px;
+  }
+  #furin .fr-link { position: absolute; transform-origin: 0 0; transform-style: preserve-3d; will-change: transform; }
+  #furin .fr-l0 { left: 0; top: 0; }
+  #furin .fr-bell-svg {
+    position: absolute; left: -80px; top: -10px; overflow: visible;
+    filter: drop-shadow(0 14px 24px rgba(0,0,0,0.20)); transition: filter 420ms var(--ease-out);
+  }
+  #furin .fr-bell-svg.striking {
+    filter: drop-shadow(0 14px 24px rgba(0,0,0,0.20)) drop-shadow(0 0 18px var(--accent-glow)) brightness(1.2);
+    transition: filter 60ms ease-in;
+  }
+  #furin .fr-cord { stroke: rgba(86,64,44,0.92); stroke-width: 1.8; }
+  #furin .fr-knot { fill: rgba(70,52,36,0.95); }
+  #furin .fr-glass { stroke: color-mix(in srgb, var(--accent) 30%, rgba(255,255,255,0.8)); stroke-opacity: 0.5; stroke-width: 0.8; }
+  #furin .fr-deco path { stroke: color-mix(in srgb, var(--accent) 85%, #1f2630); fill: none; stroke-linecap: round; opacity: 0.52; }
+  #furin .fr-deco .fr-d1 { stroke-width: 4.5; }
+  #furin .fr-deco .fr-d2 { stroke-width: 3.5; opacity: 0.44; }
+  #furin .fr-deco .fr-d3 { stroke-width: 3; opacity: 0.36; }
+  #furin .fr-bloom { opacity: 0.45; }
+  #furin .fr-speck { fill: rgba(255,255,255,0.4); }
+  #furin .fr-crescent { stroke: rgba(255,255,255,0.22); stroke-width: 2; stroke-linecap: round; }
+  #furin .fr-bowlight { stroke: rgba(255,255,255,0.17); stroke-width: 3; stroke-linecap: round; }
+  #furin .fr-mouth-shadow { fill: rgba(36,30,52,0.14); }
+  #furin .fr-rim { stroke: rgba(255,255,255,0.30); stroke-width: 1.4; stroke-linecap: round; }
+  #furin .fr-mouth-mark { position: absolute; width: 0; height: 0; top: 178px; }
+  #furin .fr-mouth-l { left: -31px; }
+  #furin .fr-mouth-r { left: 31px; }
+  #furin .fr-l1 { left: 0; top: 120px; }
+  #furin .fr-thread {
+    position: absolute; left: -0.6px; top: 0; width: 1.2px; height: 74px;
+    background: linear-gradient(180deg, rgba(64,48,32,0.14) 0px, rgba(64,48,32,0.16) 52px, rgba(64,48,32,0.78) 61px, rgba(64,48,32,0.78) 100%);
+  }
+  #furin .fr-bead {
+    position: absolute; left: -5.5px; top: 68.5px; width: 11px; height: 11px; border-radius: 999px;
+    background: radial-gradient(circle at 32% 26%, rgba(255,255,255,0.9) 0 8%, rgba(255,255,255,0) 36%), radial-gradient(circle at 35% 30%, #f7ecd9, #bb9f74 62%, #7e6443);
+    box-shadow: inset -1px -1.5px 2px rgba(70,50,28,0.45), 0 1px 3px rgba(0,0,0,0.35);
+  }
+  #furin .fr-l2 { left: 0; top: 74px; }
+  #furin .tz-thread {
+    position: absolute; left: -0.6px; top: 4.5px; width: 1.2px; height: 14.5px;
+    background: linear-gradient(180deg, rgba(64,48,32,0.0), rgba(64,48,32,0.78) 4px);
+  }
+  #furin .fr-tz { position: absolute; left: -23px; top: 12px; width: 46px; height: 200px; transform-style: preserve-3d; }
+  #furin .tz-paper {
+    position: absolute; inset: 0; border-radius: 2px 2px 3px 3px;
+    background: repeating-linear-gradient(0deg, rgba(150,118,64,0.03) 0 1px, transparent 1px 3px), linear-gradient(175deg, #fbf7ed, #f2ebda 60%, #eae1cc);
+    box-shadow: inset 0 0 0 0.5px rgba(120,90,40,0.20), inset 0 1px 0 rgba(255,255,255,0.7), 0 2px 6px rgba(0,0,0,0.18), 0 12px 24px -8px rgba(0,0,0,0.22);
+    will-change: transform;
+  }
+  #furin .tz-hole { position: absolute; top: 6px; left: 50%; width: 3.5px; height: 3.5px; margin-left: -1.75px; border-radius: 999px; background: rgba(96,72,44,0.5); box-shadow: inset 0 0.5px 1px rgba(0,0,0,0.45); }
+  #furin .tz-text { position: absolute; inset: 16px 3px 22px; display: flex; justify-content: center; align-items: center; overflow: hidden; }
+  #furin .tz-text span {
+    writing-mode: vertical-rl; text-orientation: mixed; max-height: 100%;
+    font-family: "Kaiti SC", "STKaiti", "Songti SC", "Noto Serif CJK SC", serif;
+    font-size: 17px; font-weight: 600; line-height: 1.32; letter-spacing: 0.14em; color: #3a2f22; text-shadow: 0 0.5px 0 rgba(255,255,255,0.5);
+  }
+  #furin .tz-seal { position: absolute; bottom: 9px; left: 50%; width: 9px; height: 9px; margin-left: -4.5px; border-radius: 2px; background: color-mix(in srgb, var(--accent) 30%, #c43e2c); opacity: 0.85; }
+  #furin .fr-ring {
+    position: absolute; width: 44px; height: 44px; margin: -22px 0 0 -22px; border-radius: 999px;
+    border: 1px solid color-mix(in srgb, var(--accent) var(--ring-accent-mix, 40%), #ffffff);
+    opacity: calc(0.15 + var(--ri, 0.6) * 0.32); animation: fr-ring 750ms cubic-bezier(0.17,0.67,0.35,1) forwards; pointer-events: none;
+  }
+  #furin .fr-ring.echo { width: 30px; height: 30px; margin: -15px 0 0 -15px; animation-duration: 950ms; }
+  @keyframes fr-ring { from { transform: scale(0.25); } to { transform: scale(calc(0.55 + var(--ri, 0.6) * 0.85)); opacity: 0; } }
+
+  /* harness: 300x470 hanging-profile window outline so I judge it at real size */
+  #frame { position: absolute; top: 0; right: 60px; width: 300px; height: 470px; outline: 1px dashed rgba(255,255,255,0.12); }
+  #furin { left: auto; right: 60px; width: 300px; }
+</style>
+</head>
+<body class="theme-furin" data-layout="furin">
+  <div id="frame"></div>
+  <div id="furin"></div>
+
+  <script>
+    // furin.js registers an onset handler against FL_AUDIO at load — must exist first.
+    // Idle test: getFrame returns null (no muse), so only the simulated breeze drives it.
+    window.FL_AUDIO = { getFrame: () => null, onOnset: () => {} };
+  </script>
+  <script src="../renderer/furin.js"></script>
+  <script>
+    FL_FURIN.start();
+    // IDLE state — the criterion test: no muse, no lyric, blank tanzaku.
+    setTimeout(() => FL_FURIN.clear(), 600);
+    (function loop(){ FL_FURIN.frame(); requestAnimationFrame(loop); })();
+    // Expose a manual strike for ring screenshots.
+    window.__kick = () => { const C = window.__furin; FL_FURIN.setLine({ text: '叮——' }); };
+  </script>
+</body>
+</html>
