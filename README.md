@@ -7,7 +7,7 @@
 ```text
 muse                            echo
 持有 audio + library   ──/now──────▶   悬浮歌词 + 视觉氛围
-                       └─/spectrum─┘    （音频反应引擎，休眠待用）
+                       └─/spectrum─┘    （音频反应引擎：风铃 / 漫游 / 新世纪 / 镭射票 在听）
 ```
 
 ## 运行（需要 muse）
@@ -43,20 +43,29 @@ npm start
 - 菜单栏 `♪` 图标：切主题、重置该主题的窗口、显示 / 隐藏、退出
 - **按主题决定窗框**——切到 `流体` 自动全屏可交互，`弹幕` 自动全屏穿透，`短信` 自动右侧竖卡，`字幕` 自动贴底。手动拖大 / 改穿透状态的偏好会按主题记住
 
-## 六个主题
+## 十五个主题
 
 | 主题 | layout | 窗框 | 一句话 |
 |---|---|---|---|
 | 打字机 | stage | headline · 顶居中 | 纸张 + 等宽 + 逐字光标 |
 | 水墨 | stage | headline · 顶居中 | 衬线书法，blur 晕开 |
 | 流体 | stage | ambient · 全屏 | WebGL fbm 流体背景 |
+| 余烬 | stage | ambient · 全屏 | WebGL 上升火焰，烬光托着歌词 |
+| 曲速 | stage | ambient · 全屏 | WebGL 径向星流，跃迁隧道 |
+| 天空 | stage | ambient · 全屏 | 赛璐璐粉彩云海（ちいかわ感），唯一浅色 fx |
 | 字幕 | single | subtitle-strip · 贴底 | 不抢戏的桌面字幕条 |
 | 弹幕 | danmaku | overlay · 全屏穿透 | 歌词像 B 站弹幕飘过桌面 |
+| 漫游 | roam | overlay · 全屏穿透 | 导演逐句调度全桌面的动态排版，副歌视觉押韵 |
+| 云隙 | shinkai | ambient · 全屏 | 新海诚式天空——跟真实时刻走的天色、云隙光、电线剪影 |
+| 星瞳 | idol | ambient · 全屏 | 偶像舞台：荧光棒海随歌涌动，星瞳落在一个字上 |
+| 新世纪 | eva | ambient · 全屏 | 黑场明朝体字卡硬切（次回予告），鼓点泛起 A.T. 力场 |
+| 风铃 | furin | hanging · 顶部垂挂 | 江户玻璃风铃桌面物件，歌词竖排短册，歌声化风 |
+| 镭射票 | ticket | tall-card · 右侧竖卡 | 全息演唱会票根，歌词是烫印防伪纹，换曲撕票 |
 | 短信 | conversation | card · 右侧竖卡 | 歌词逐句变成 iMessage 气泡 |
 
 加新主题大多数时候只是往 `renderer/themes.js` 加一条；详见 [ARCHITECTURE.md](./ARCHITECTURE.md)。
 
-> 早期版本有 24 个主题（含 three.js 字碎、雨夜钢琴、纯音乐 visualizer 等）。2026-06 收敛到这 6 个常用的，并去掉了 `nowplaying-cli` 兜底（现在 muse-only）。驱动音频反应主题的 **spectrum + onset 引擎**作为基础设施保留下来、休眠待用，将来要做听声音的主题直接 `FL_AUDIO.onOnset(cb)` 订阅即可——见 [AUDIO_ANALYSIS.md](./AUDIO_ANALYSIS.md)。
+> 早期版本有 24 个主题（含 three.js 字碎、雨夜钢琴、纯音乐 visualizer 等）。2026-06 一度收敛到 6 个常用的，并去掉了 `nowplaying-cli` 兜底（现在 muse-only）；之后按「视觉语法案例研究」的标准重新长出新主题——每个都要有自己的参照系、剧情内歌词、音频映射、空闲态和换曲仪式，而不是换肤。当年休眠保留的 **spectrum + onset 引擎**也随之转正：风铃（rms→风）、漫游（rms→导演能量）、新世纪（onset→A.T. 力场）、镭射票（onset→倾斜、centroid→衍射色）都在 `FL_AUDIO.onOnset(cb)` / `getFrame()` 上听歌——见 [AUDIO_ANALYSIS.md](./AUDIO_ANALYSIS.md)。
 
 ## 维护文档
 
