@@ -32,10 +32,9 @@
 //
 // NOTE: the spectrum/onset engine (renderer/audio.js) now has consumers:
 // furin (rms → wind, onsets → clapper kicks), roam (rms → director energy,
-// onsets → stage glow), ticket (rms → handling energy, onsets → tilt kicks,
-// centroid → diffraction hue). Register more via FL_AUDIO.onOnset / getFrame.
-// (eva used to ripple A.T. fields on onsets; it dropped the tie to keep the
-// void still — the typography carries the frame.)
+// onsets → stage glow), eva (onsets → A.T. field), ticket (rms → handling
+// energy, onsets → tilt kicks, centroid → diffraction hue). Register more
+// via FL_AUDIO.onOnset / getFrame.
 
 // IIFE-wrapped so internal names (THEMES, etc.) don't leak to the shared
 // global scope. Plain <script> tags all share one global scope, and app.js
@@ -377,9 +376,9 @@ const THEMES = [
 
   // ---------- eva · NERV-terminal title cards / 新世纪 ----------
   // Case study in a specified art direction: lyrics as 次回予告-style Mincho
-  // intertitles on a bare black void (hard cuts, no easing) — no corner chrome
-  // or readouts, the type carries the frame — and a 緊急 → 対象識別 lock-on
-  // runs on track change. renderer/eva.js.
+  // intertitles on a bare black void (hard cuts, no easing); A.T.-field
+  // hexagons ripple out on onsets and a lock-on sequence runs on track
+  // change. renderer/eva.js.
   {
     name: 'eva', label: '新世纪', window: 'ambient',
     layout: 'eva', reveal: 'none',
