@@ -1,0 +1,90 @@
+<!doctype html>
+<!-- eva-dev.html — 联调页：加载真实的 renderer/style.css + renderer/eva.js + textpick.js，
+     stub 掉 FL_AUDIO，按脚本驱动 setTrack / setLine / clear，用来在浏览器里直接打磨
+     「新世纪」主题本体（而非另画一份 demo）。
+     URL 参数:
+       ?scene=cards   逐句过歌词（默认），看各种 title-card 排版
+       ?scene=switch  换曲仪式：緊急 → 対象識別 → 硬切首张卡
+       ?scene=idle    待機 standby
+       ?line=<text>   只渲染这一句（看它命中的排版，调单张卡用）         -->
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<title>eva · dev harness</title>
+<link rel="stylesheet" href="../renderer/style.css">
+<style>
+  html, body { height: 100%; margin: 0; background: #050505; }
+  #devnote {
+    position: fixed; left: 12px; bottom: 10px; z-index: 99;
+    font: 10px/1.5 "SF Mono", Menlo, monospace; letter-spacing: 2px;
+    color: rgba(255, 106, 0, 0.30); pointer-events: none;
+  }
+</style>
+</head>
+<body class="theme-eva" data-layout="eva" style="--fl-scale: 1;">
+
+<div id="eva"></div>
+<div id="devnote"></div>
+
+<script>
+// FL_AUDIO stub — eva 改版后不再消费 onset，这里只保证模块加载不报错。
+(function () {
+  window.FL_AUDIO = { onOnset() {}, getFrame() { return { rms: 0, centroid: 0.5, t: 0 }; }, frame() {} };
+})();
+</script>
+<script src="../renderer/textpick.js"></script>
+<script src="../renderer/eva.js"></script>
+<script>
+(function () {
+  const q = new URLSearchParams(location.search);
+  const scene = q.get('scene') || 'cards';
+  const oneLine = q.get('line');
+  document.getElementById('devnote').textContent = 'EVA DEV — scene:' + scene;
+
+  FL_EVA.start();
+  // setInterval (not rAF) so the lock-on sequence advances under headless
+  // virtual-time too — rAF is throttled in headless Chrome. Real app uses rAF.
+  setInterval(() => FL_EVA.frame(), 16);
+
+  // 一批真实味道的中文歌词（含长短句、留白句、latin、带明显关键词的句）
+  const LINES = [
+    '找到闯进我心的入口',
+    '晚时雨多',
+    '伞下更朦胧',
+    '整座城市替我失眠',
+    '把整个夜晚都说给你听',
+    '光',
+    '我们是彼此的 A.T. Field',
+    '心跳逐渐重合的瞬间',
+    '再靠近一点点',
+    'NEON GENESIS',
+    '雨',
+    '世界在此刻安静下来',
+  ];
+
+  // 单句：直接渲染（不走换曲仪式，方便配合 force 截单张排版）
+  if (oneLine) { FL_EVA.clear(); setTimeout(() => FL_EVA.setLine({ text: oneLine }), 30); return; }
+
+  if (scene === 'idle') { FL_EVA.clear(); return; }
+
+  if (scene === 'switch') {
+    // 看完整换曲仪式：緊急 → 対象識別 → 硬切首句。?cover=1 挂一张占位封面
+    const cover = q.get('cover') ? 'file:///tmp/eva_shots/cover.png' : '';
+    FL_EVA.setTrack({ title: '恋爱语音导航', artist: '泠鸢yousa / 小野道ono', cover });
+    setTimeout(() => FL_EVA.setLine({ text: LINES[0] }), 2600);
+    return;
+  }
+
+  // cards：不走仪式，直接逐句过，便于截各种排版
+  FL_EVA.clear();
+  let li = 0;
+  setTimeout(function step() {
+    FL_EVA.setLine({ text: LINES[li % LINES.length] });
+    li++;
+    setTimeout(step, 2400);
+  }, 200);
+})();
+</script>
+
+</body>
+</html>

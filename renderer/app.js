@@ -18,6 +18,7 @@ const stageEl = document.getElementById('stage');
 let state = {
   trackKey: '',
   lines: [],
+  kLines: [],           // per-syllable karaoke model (karaoke theme only)
   lastIdx: -2,
   elapsed: 0,
   rate: 1,
@@ -38,7 +39,10 @@ function fmtTrackKey(np) {
   return `${np.title}|${np.artist}`;
 }
 
-// Load lyrics for a new track. Returns the loaded lines (or []).
+// Load lyrics for a new track. Returns { lines, kLines, cover }:
+//   lines  — line-level [{time,text}] for every standard theme (findIndex)
+//   kLines — per-syllable karaoke model [{…, chars[], trans?}] for the karaoke
+//            theme (real yrc when the song has it, synthetic otherwise)
 // Does NOT touch the DOM — caller commits the result.
 async function fetchLyricsFor(np) {
   try {
@@ -50,21 +54,25 @@ async function fetchLyricsFor(np) {
       // Pass duration when available so search can break ties between
       // cover/instrumental versions that share title+artist but differ in length.
       const found = await Netease.searchSong(np.title, np.artist, np.duration);
-      if (!found) return { lines: [], cover: null };
+      if (!found) return { lines: [], kLines: [], cover: null };
       id = found.id;
       cover = cover || found.cover;
     }
-    const { lrc } = await fetchLyricSafe(id);
-    return { lines: LRC.parseLRC(lrc), cover };
+    const { lrc, tlyric, yrc } = await fetchLyricSafe(id);
+    return {
+      lines: LRC.parseLRC(lrc),
+      kLines: LRC.buildKaraoke(lrc, tlyric, yrc),
+      cover,
+    };
   } catch (e) {
     console.error(e);
-    return { lines: [], cover: null };
+    return { lines: [], kLines: [], cover: null };
   }
 }
 
 async function fetchLyricSafe(id) {
   try { return await Netease.fetchLyric(id); }
-  catch { return { lrc: '' }; }
+  catch { return { lrc: '', tlyric: '', yrc: '' }; }
 }
 
 let pendingSwap = null;
@@ -179,6 +187,12 @@ function renderAt(t) {
     return;
   }
 
+  if (document.body.dataset.layout === 'karaoke') {
+    // Self-driven: the karaoke view owns the scroll + per-syllable fill and
+    // reads the continuous clock in frame(t). Nothing to push per line.
+    return;
+  }
+
   if (usesStage()) {
     // Stage themes split the line into per-codepoint spans for the reveal
     // stagger; pass the line (or '♪' as the between-lines placeholder).
@@ -266,7 +280,7 @@ async function applyAccentFromCover(url) {
 }
 
 // Commit a fully-loaded track to the UI all at once.
-function commitTrack(np, lines, cover, elapsed, rate) {
+function commitTrack(np, lines, kLines, cover, elapsed, rate) {
   // New song, new show: reset roam's per-song director memory (chorus-rhyme
   // cache, region recency, wind heading). Harmless when roam is hidden.
   FL_ROAM.clear();
@@ -278,6 +292,9 @@ function commitTrack(np, lines, cover, elapsed, rate) {
   FL_IDOL.setTrack(np);
   // ticket: tear the old stub onto tonight's pile, deal the new ticket in.
   FL_TICKET.setTrack(np);
+  // karaoke: rebuild the scrolling sing-along column from the per-syllable
+  // model (falls back to the title when the song is instrumental).
+  FL_KARAOKE.setLines(kLines, np);
   titleEl.textContent = np.title;
   artistEl.textContent = np.artist ? ' · ' + np.artist : '';
   if (cover) {
@@ -288,6 +305,7 @@ function commitTrack(np, lines, cover, elapsed, rate) {
   }
 
   state.lines = lines;
+  state.kLines = kLines;
   state.lastIdx = -2;
   state.elapsed = elapsed;
   state.lastSyncAt = performance.now();
@@ -374,9 +392,13 @@ async function pollNowPlaying() {
       } else if (document.body.dataset.layout === 'idol') {
         // House lights down; the ghost light takes the stage.
         FL_IDOL.clear();
+      } else if (document.body.dataset.layout === 'karaoke') {
+        // The song's over — rest on a ♪ at center until the next track.
+        FL_KARAOKE.clear();
       }
       state.trackKey = '';
       state.lines = [];
+      state.kLines = [];
       state.rate = 0;
       state.lastIdx = -2;
       document.body.style.setProperty('--fl-cover-url', 'none');
@@ -417,7 +439,7 @@ async function pollNowPlaying() {
   const loadStartRate    = np.rate > 0 ? np.rate : 1;
   const loadStartAt      = performance.now();
 
-  const { lines, cover } = await fetchLyricsFor(np);
+  const { lines, kLines, cover } = await fetchLyricsFor(np);
 
   if (state.trackKey !== key) {
     state.isLoading = false;
@@ -427,7 +449,7 @@ async function pollNowPlaying() {
   // Estimate where the song is now: initial elapsed + time spent loading × rate.
   const loadedElapsed = loadStartElapsed + (performance.now() - loadStartAt) / 1000 * loadStartRate;
 
-  commitTrack(np, lines, cover, loadedElapsed, np.rate);
+  commitTrack(np, lines, kLines, cover, loadedElapsed, np.rate);
   // Adopt muse's stateVersion at track-commit time so the next same-track
   // poll doesn't spuriously trip the "discontinuity" branch.
   if (typeof np.stateVersion === 'number') state.stateVersion = np.stateVersion;
@@ -455,6 +477,7 @@ function tick() {
   FL_EVA.frame();
   FL_SHINKAI.frame();
   FL_IDOL.frame();
+  FL_KARAOKE.frame(t);   // karaoke owns the per-syllable fill — needs the clock
   requestAnimationFrame(tick);
 }
 
@@ -548,6 +571,7 @@ function applyTheme(name) {
   if (theme.layout === 'eva') FL_EVA.start(); else FL_EVA.stop();
   if (theme.layout === 'shinkai') FL_SHINKAI.start(); else FL_SHINKAI.stop();
   if (theme.layout === 'idol') FL_IDOL.start(); else FL_IDOL.stop();
+  if (theme.layout === 'karaoke') FL_KARAOKE.start(); else FL_KARAOKE.stop();
 
   // Persistence is split: the *default* theme (manual pick) is saved by
   // setAndReportTheme(); auto-switch-driven applies do NOT overwrite it.

@@ -12,7 +12,7 @@ const HEADERS = {
 // Bounded by MAX_ENTRIES; oldest key evicted on overflow.
 const MAX_ENTRIES = 128;
 const searchCache = new Map(); // key: `${title}|${artist}` → { id, cover }
-const lyricCache  = new Map(); // key: songId → { lrc }
+const lyricCache  = new Map(); // key: songId → { lrc, tlyric, yrc }
 
 function cachePut(map, key, value) {
   if (map.has(key)) map.delete(key);
@@ -90,14 +90,30 @@ async function searchSong(title, artist, duration) {
   return cachePut(searchCache, cacheKey, out);
 }
 
+// Returns { lrc, tlyric, yrc }:
+//   lrc    — standard line-level LRC (every theme; the binding contract)
+//   tlyric — Chinese translation track (karaoke theme shows it as a sub-line)
+//   yrc    — verbatim / 逐字 per-syllable timing (karaoke theme's real sync)
+// The v1 endpoint carries all three; we prefer it. If it's unavailable we fall
+// back to the classic endpoint for lrc alone, so line-level lyrics — which the
+// whole app depends on — can never regress when only the verbatim track fails.
 async function fetchLyric(songId) {
   const hit = cacheGet(lyricCache, songId);
   if (hit) return hit;
-  // lv=1 = the standard LRC track. echo only renders line-level lyrics now, so
-  // we no longer request tv (translation) or yv (per-char karaoke timing).
-  const url = `https://music.163.com/api/song/lyric?id=${songId}&lv=1`;
-  const j = await fetchJSON(url);
-  return cachePut(lyricCache, songId, { lrc: j?.lrc?.lyric || '' });
+  try {
+    const url = `https://music.163.com/api/song/lyric/v1?id=${songId}&lv=1&tv=1&yv=1`;
+    const j = await fetchJSON(url);
+    const lrc = j?.lrc?.lyric || '';
+    if (lrc || j?.yrc?.lyric) {
+      return cachePut(lyricCache, songId, {
+        lrc,
+        tlyric: j?.tlyric?.lyric || '',
+        yrc:    j?.yrc?.lyric    || '',
+      });
+    }
+  } catch { /* fall through to the classic endpoint */ }
+  const j2 = await fetchJSON(`https://music.163.com/api/song/lyric?id=${songId}&lv=1`);
+  return cachePut(lyricCache, songId, { lrc: j2?.lrc?.lyric || '', tlyric: '', yrc: '' });
 }
 
 window.Netease = { searchSong, fetchLyric };

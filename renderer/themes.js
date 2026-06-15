@@ -16,6 +16,8 @@
 //                     intertitles + live analysis chrome.
 //     - shinkai:      time-of-day sky (light/clouds/wires); lyric lower third.
 //     - idol:         star stage (penlight sea, spotlights, ★ glints).
+//     - karaoke:      scrolling sing-along column; the active line fills
+//                     per-syllable in real time (yrc), with a count-in.
 //   reveal: 'wave' | 'typewriter' | 'ink' | 'none'
 //     Per-char entrance animation. Only meaningful for layout=stage.
 //   fx:     'plasma' | undefined  (optional GPU shader layer, renderer/fx.js)
@@ -30,9 +32,10 @@
 //
 // NOTE: the spectrum/onset engine (renderer/audio.js) now has consumers:
 // furin (rms → wind, onsets → clapper kicks), roam (rms → director energy,
-// onsets → stage glow), eva (onsets → A.T. field), ticket (rms → handling
-// energy, onsets → tilt kicks, centroid → diffraction hue). Register more
-// via FL_AUDIO.onOnset / getFrame.
+// onsets → stage glow), ticket (rms → handling energy, onsets → tilt kicks,
+// centroid → diffraction hue). Register more via FL_AUDIO.onOnset / getFrame.
+// (eva used to ripple A.T. fields on onsets; it dropped the tie to keep the
+// void still — the typography carries the frame.)
 
 // IIFE-wrapped so internal names (THEMES, etc.) don't leak to the shared
 // global scope. Plain <script> tags all share one global scope, and app.js
@@ -336,11 +339,47 @@ const THEMES = [
     },
   },
 
+  // ---------- karaoke · sing-along lyrics / 卡拉OK ----------
+  // A karaoke screen: a scrolling focus column where the active line fills
+  // left→right per syllable in real time (real NetEase yrc when the song has
+  // it, synthetic even-split otherwise), sung lines stay lit above, upcoming
+  // wait empty below, and ●●● count-in dots deplete across the instrumental
+  // gap before each line. Optional translation sub-line. renderer/karaoke.js.
+  // Keeps the rounded-panel chrome — the blurred cover is the karaoke screen.
+  {
+    name: 'karaoke', label: '卡拉OK', window: 'karaoke',
+    layout: 'karaoke', reveal: 'none',
+    customClass: true,
+    tokens: {
+      // Blurred album cover as the karaoke screen, held dark so the bright
+      // syllable fill and the count-in read on top of any cover.
+      '--fl-bg-color':      '#0c0a12',
+      '--fl-bg-blur':       '44px',
+      '--fl-bg-saturate':   '1.5',
+      '--fl-bg-brightness': '0.5',
+      '--fl-bg-scale':      '1.35',
+      '--fl-tint-image': `
+        linear-gradient(180deg, rgba(0,0,0,0.34) 0%, rgba(0,0,0,0.64) 100%),
+        radial-gradient(ellipse 92% 70% at 50% 32%, var(--accent-glow), transparent 64%)`,
+      // The wipe palette: --kk-dim is the unsung outline, --kk-fill the sung
+      // color (accent-tinted white so it lifts off the cover yet stays on-brand).
+      '--kk-dim':   'rgba(255,255,255,0.30)',  // active line's unsung outline (faint, for contrast)
+      '--kk-ctx':   'rgba(255,255,255,0.62)',  // context lines' base — readable so you can sing ahead
+      '--kk-fill':  'color-mix(in srgb, var(--accent) 52%, #ffffff)',
+      '--kk-trans': 'rgba(255,255,255,0.46)',
+      '--kk-size':  '30px',
+      '--fl-chrome-bg':     'rgba(14, 10, 22, 0.5)',
+      '--fl-chrome-fg':     '#fff',
+      '--fl-chrome-border': 'rgba(255, 255, 255, 0.14)',
+      '--fl-chrome-artist': 'rgba(255, 255, 255, 0.6)',
+    },
+  },
+
   // ---------- eva · NERV-terminal title cards / 新世纪 ----------
   // Case study in a specified art direction: lyrics as 次回予告-style Mincho
-  // intertitles on a bare black void (hard cuts, no easing); A.T.-field
-  // hexagons ripple out on onsets and a lock-on sequence runs on track
-  // change. renderer/eva.js.
+  // intertitles on a bare black void (hard cuts, no easing) — no corner chrome
+  // or readouts, the type carries the frame — and a 緊急 → 対象識別 lock-on
+  // runs on track change. renderer/eva.js.
   {
     name: 'eva', label: '新世纪', window: 'ambient',
     layout: 'eva', reveal: 'none',

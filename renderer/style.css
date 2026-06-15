@@ -464,6 +464,17 @@ body[data-layout="idol"] #tint,
 body[data-layout="idol"] #fx { display: none; }
 body[data-layout="idol"] #idol { display: block; }
 
+/* karaoke layout — sing-along column. Unlike the fullscreen/transparent
+   layouts this KEEPS #bg + #tint: the blurred cover is the karaoke screen the
+   lyric column sits on, inside the rounded panel chrome. */
+body[data-layout="karaoke"] #lyrics,
+body[data-layout="karaoke"] #stage,
+body[data-layout="karaoke"] #cover-panel,
+body[data-layout="karaoke"] #danmaku,
+body[data-layout="karaoke"] #convo,
+body[data-layout="karaoke"] #fx { display: none; }
+body[data-layout="karaoke"] #karaoke { display: block; }
+
 /* furin layout — hanging wind-chime ornament. Fully transparent canvas like
    danmaku (no bg/tint/fx); everything lives inside #furin, driven by
    renderer/furin.js. */
@@ -796,22 +807,147 @@ body.theme-idol { box-shadow: none; border-radius: 0; }
   to   { transform: scale(1.12) rotate(8deg); }
 }
 
-/* ----- eva · NERV-terminal title cards / 新世纪 ----- */
-/* Discipline: hard cuts only. The single allowed animation is a 2-step slam;
-   everything else either IS or ISN'T. Type = ultra-bold Mincho. */
+/* ----- karaoke · sing-along lyrics / 卡拉OK ----- */
+/* A scrolling focus column on the blurred-cover screen. The active line rides
+   the optical center, enlarged + glowing; the rest dim and blur by distance
+   (set inline by karaoke.js). Each timed unit (.kk-ch) is painted with a hard
+   left→right gradient clipped to the glyph — --p (0..1, written per frame) is
+   the fill fraction, so sung text is --kk-fill, unsung is --kk-dim, and the
+   live edge sweeps inside the unit being sung. */
+#karaoke {
+  display: none;
+  position: absolute; inset: 0;
+  z-index: 3;
+  overflow: hidden;
+  pointer-events: none;
+  font-family: var(--fl-text-font, inherit);
+}
+#karaoke .kk-stage { position: absolute; inset: 0; overflow: hidden; }
+#karaoke .kk-scroll {
+  position: absolute;
+  left: 0; right: 0; top: 0;
+  padding: 0 7%;
+  transform: translateY(50%);
+  transition: transform 600ms cubic-bezier(0.22, 0.61, 0.18, 1);
+  will-change: transform;
+}
+#karaoke .kk-line {
+  text-align: center;
+  padding: 0.46em 0;
+  transform-origin: center;
+  transition: opacity 480ms var(--ease-out),
+              filter  480ms var(--ease-out),
+              transform 480ms var(--ease-out);
+  will-change: transform, opacity, filter;
+}
+#karaoke .kk-line.active { transform: scale(1.16); }
+#karaoke .kk-line.active .kk-text {
+  /* The sung column glows as a whole — cheaper and softer than per-glyph
+     shadow, and it survives the transparent text-fill the wipe needs. */
+  filter: drop-shadow(0 1px 14px var(--accent-glow))
+          drop-shadow(0 2px 6px rgba(0, 0, 0, 0.55));
+}
+#karaoke .kk-text {
+  font-size: calc(var(--kk-size, 30px) * var(--fl-scale));
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  line-height: 1.22;
+  word-break: break-word;
+}
+#karaoke .kk-ch {
+  display: inline-block;
+  white-space: pre;           /* keep a unit's internal/trailing space */
+  background-image: linear-gradient(90deg,
+    var(--kk-fill, #fff) calc(var(--p, 0) * 100%),
+    var(--kk-dim, rgba(255,255,255,0.3)) calc(var(--p, 0) * 100%));
+  -webkit-background-clip: text;
+          background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+  transition: transform 130ms var(--ease-out);
+}
+/* the unit being sung lifts a hair — the cursor has life */
+#karaoke .kk-ch.now { transform: translateY(-0.07em) scale(1.08); }
+/* Context lines (not the one being sung) use a more readable unfilled color
+   than the active line's faint outline — you have to read ahead to sing ahead.
+   Past lines (--p:1) still resolve to --kk-fill; only the unfilled half changes. */
+#karaoke .kk-line:not(.active) .kk-ch {
+  background-image: linear-gradient(90deg,
+    var(--kk-fill, #fff) calc(var(--p, 0) * 100%),
+    var(--kk-ctx, rgba(255,255,255,0.6)) calc(var(--p, 0) * 100%));
+}
+
+/* translation sub-line — only surfaces under the active line */
+#karaoke .kk-trans {
+  margin-top: 0.34em;
+  font-size: calc(13px * var(--fl-scale));
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--kk-trans, rgba(255, 255, 255, 0.46));
+  opacity: 0;
+  transition: opacity 420ms var(--ease-out);
+}
+#karaoke .kk-line.active .kk-trans { opacity: 1; }
+
+/* idle / instrumental — one resting line (title or ♪) at center */
+#karaoke .kk-title {
+  font-size: calc(var(--kk-size, 30px) * var(--fl-scale) * 1.05);
+  font-weight: 800;
+  color: var(--kk-dim, rgba(255, 255, 255, 0.42));
+  filter: none;
+}
+
+/* count-in — ●●● deplete across the instrumental gap before a line, so the
+   singer knows the beat to come in on. Pinned as a top-center HUD cue so it
+   never collides with the tightly-stacked scrolling lines. */
+#karaoke .kk-countin {
+  position: absolute;
+  left: 50%; top: 15%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: calc(12px * var(--fl-scale));
+  opacity: 0;
+  transition: opacity 340ms var(--ease-out);
+  pointer-events: none;
+}
+#karaoke .kk-countin.show { opacity: 1; }
+#karaoke .kk-countin i {
+  width: calc(9px * var(--fl-scale));
+  height: calc(9px * var(--fl-scale));
+  border-radius: 999px;
+  background: var(--kk-dim, rgba(255, 255, 255, 0.28));
+  transition: background 220ms var(--ease-out);
+}
+#karaoke .kk-countin i.on {
+  background: var(--kk-fill, #fff);
+  box-shadow: 0 0 12px var(--accent-glow);
+  animation: kk-dot 1s ease-in-out infinite;
+}
+@keyframes kk-dot {
+  0%, 100% { transform: scale(1);   opacity: 1;   }
+  50%      { transform: scale(1.34); opacity: 0.85; }
+}
+
+/* ===== eva · NERV-terminal title cards / 新世纪 =============================
+   Discipline: hard cuts only. The one allowed animation is a 2-step slam;
+   the lock-on ceremony snaps between states, never eases. Type = ultra-bold
+   Mincho on a bare void — no corner chrome, no readouts. The void used to
+   ripple A.T.-field hexagons on the onset stream — that fought the type, so
+   it is still and empty now: the typography carries the whole frame. */
 body.theme-eva { box-shadow: none; border-radius: 0; }
 #eva {
   display: none;
   position: absolute; inset: 0;
   z-index: 3;
-  background: #050505;
+  background: radial-gradient(125% 95% at 50% 46%, #070707 0%, #040404 68%, #010101 100%);
   overflow: hidden;
   font-family: "Hiragino Mincho ProN", "Hiragino Mincho Pro", "Songti SC", "STSong", serif;
 }
-#eva .ev-fx { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 2; pointer-events: none; }
+
+/* — bare void: just faint scanlines, nothing in the corners — */
 #eva .ev-scan {
   position: absolute; inset: 0; z-index: 4; pointer-events: none;
-  background: repeating-linear-gradient(0deg, rgba(255,255,255,0.016) 0 1px, transparent 1px 3px);
+  background: repeating-linear-gradient(0deg, rgba(255,255,255,0.015) 0 1px, transparent 1px 3px);
 }
 
 /* — title card — */
@@ -821,13 +957,15 @@ body.theme-eva { box-shadow: none; border-radius: 0; }
   font-weight: 800;
   pointer-events: none;
 }
-#eva .ev-card.slam { animation: ev-slam 100ms steps(2, end); }
-@keyframes ev-slam { from { transform: scale(1.045); } to { transform: scale(1); } }
+#eva .ev-card.slam { animation: ev-slam 110ms steps(2, end); }
+@keyframes ev-slam { from { transform: scale(1.05); } to { transform: scale(1); } }
 #eva .ev-card .red { color: #e60012; }
 #eva .ev-card.ev-invert { background: #f2f0e8; color: #0a0a0a; }
 #eva .ev-card.ev-invert .red { color: #e60012; }
 
 #eva .ev-row { white-space: nowrap; line-height: 1.02; letter-spacing: -0.015em; }
+
+/* stack — asymmetric rows filling the frame */
 #eva .ev-stack {
   position: absolute; inset: 6% 5%;
   display: flex; flex-direction: column; justify-content: center;
@@ -836,45 +974,74 @@ body.theme-eva { box-shadow: none; border-radius: 0; }
 #eva .ev-stack .ev-r-right { text-align: right; }
 #eva .ev-stack .ev-r-mid   { text-align: left; padding-left: 12%; }
 
+/* vert — upright Mincho column, right-anchored (the 次回予告 spine) */
 #eva .ev-vert {
-  position: absolute; top: 7%; right: 10%; bottom: 7%;
+  position: absolute; top: 50%; right: 11%;
+  transform: translateY(-50%);
   writing-mode: vertical-rl; text-orientation: upright;
-  line-height: 1.04; letter-spacing: 0.04em;
+  line-height: 1.06; letter-spacing: 0.03em;
+  max-height: 88%;
 }
-#eva .ev-note {
-  position: absolute; left: 7%; bottom: 8%;
-  font-family: "SF Mono", Menlo, monospace;
-  font-size: 13px; letter-spacing: 3px; opacity: 0.55;
-}
+#eva .ev-vert span { display: inline-block; }
+
+/* giant — one keyword huge, the line dropped small bottom-right */
 #eva .ev-giant {
   position: absolute; left: 3%; top: 50%;
   transform: translateY(-54%);
-  line-height: 0.95; font-weight: 800;
+  line-height: 0.9; font-weight: 800;
 }
 #eva .ev-giant-rest {
-  position: absolute; right: 6%; bottom: 12%;
-  font-size: 34px; letter-spacing: 0.1em;
+  position: absolute; right: 6%; bottom: 11%;
+  font-size: 30px; letter-spacing: 0.12em; max-width: 58%; text-align: right;
 }
-#eva .ev-dual-a { position: absolute; left: 5%; top: 12%; }
-#eva .ev-dual-b { position: absolute; right: 5%; bottom: 14%; }
+#eva .ev-giant-rest .ev-row { white-space: normal; line-height: 1.2; }
 
+/* bleed — a single glyph blown past the top edge */
+#eva .ev-bleed-big {
+  position: absolute; left: 2%; top: -9%;
+  line-height: 0.78; font-weight: 800; color: #f2f0e8;
+}
+#eva .ev-bleed-rest {
+  position: absolute; left: 5%; bottom: 8%;
+  font-size: 38px; letter-spacing: 0.14em; max-width: 78%;
+}
+#eva .ev-bleed-rest .ev-row { white-space: normal; line-height: 1.22; }
+
+/* box — text sealed in a NERV alert rectangle */
+#eva .ev-box {
+  position: absolute; left: 50%; top: 50%;
+  transform: translate(-50%, -50%);
+  max-width: 84%; padding: 6% 7%;
+  border: 2px solid #ff6a00;
+  box-shadow: inset 0 0 0 1px rgba(255,106,0,0.16), 0 0 70px rgba(255,106,0,0.05);
+}
+#eva .ev-box::before {
+  content: ''; position: absolute; left: -2px; top: 18px;
+  width: 6px; height: 38px; background: #ff6a00;
+}
+#eva .ev-box-text { text-align: center; line-height: 1.05; }
+
+/* dual — diagonal opposition, tied by a faint slash */
+#eva .ev-dual-a { position: absolute; left: 5%; top: 11%; }
+#eva .ev-dual-b { position: absolute; right: 5%; bottom: 13%; }
+#eva .ev-dual-rule {
+  position: absolute; left: 17%; right: 17%; top: 50%;
+  height: 1.5px; transform: rotate(-9deg);
+  background: linear-gradient(90deg, transparent, rgba(255,106,0,0.45), transparent);
+}
+
+/* idle — the standby terminal: just the 待機 watermark, nothing else */
 #eva .ev-tpl-idle .ev-idle-v {
-  position: absolute; right: 14%; top: 50%;
+  position: absolute; right: 12%; top: 50%;
   transform: translateY(-50%);
   writing-mode: vertical-rl; text-orientation: upright;
-  font-size: 120px; letter-spacing: 0.3em;
-  color: rgba(242,240,232,0.22);
-}
-#eva .ev-tpl-idle .ev-idle-sub {
-  position: absolute; left: 8%; bottom: 10%;
-  font-family: "SF Mono", Menlo, monospace;
-  font-size: 12px; letter-spacing: 5px;
-  color: rgba(255,106,0,0.5);
+  font-size: 150px; letter-spacing: 0.28em;
+  color: rgba(242,240,232,0.15);
 }
 
-/* — track lock-on sequence — */
+/* — track lock-on: 緊急 strobe → 対象識別 → hard cut to first card — */
 #eva .ev-stripes {
-  position: absolute; left: 0; right: 0; height: 64px; z-index: 7;
+  position: absolute; left: 0; right: 0; height: 58px; z-index: 7;
   background: repeating-linear-gradient(-45deg, #ffd000 0 26px, #0a0a0a 26px 52px);
   display: none;
 }
@@ -882,16 +1049,16 @@ body.theme-eva { box-shadow: none; border-radius: 0; }
 #eva .ev-stripes-bot { bottom: 0; }
 #eva.ev-warn .ev-stripes { display: block; }
 #eva .ev-flash { position: absolute; inset: 0; z-index: 8; background: #e60012; opacity: 0; pointer-events: none; }
-#eva.ev-warn-on .ev-flash { opacity: 0.26; }
+#eva.ev-warn-on .ev-flash { opacity: 0.22; }
 #eva .ev-tpl-warn .ev-warn-big {
   position: absolute; left: 50%; top: 44%;
   transform: translate(-50%, -50%);
-  font-size: min(24vw, 200px); font-weight: 800;
-  letter-spacing: 0.28em; text-indent: 0.28em;
+  font-size: min(24vw, 210px); font-weight: 800;
+  letter-spacing: 0.26em; text-indent: 0.26em;
   color: #e60012;
 }
 #eva .ev-tpl-warn .ev-warn-sub {
-  position: absolute; left: 50%; top: 66%;
+  position: absolute; left: 50%; top: 65%;
   transform: translateX(-50%);
   font-family: "SF Mono", Menlo, monospace;
   font-size: 17px; letter-spacing: 14px; text-indent: 14px;
@@ -899,33 +1066,46 @@ body.theme-eva { box-shadow: none; border-radius: 0; }
 }
 #eva .ev-lock { position: absolute; inset: 0; z-index: 6; display: none; pointer-events: none; }
 #eva.ev-locking .ev-lock { display: block; }
-#eva .ev-hex {
-  position: absolute; left: 50%; top: 50%;
-  width: 300px; height: 300px;
+#eva .ev-lock-label {
+  position: absolute; left: 50%; top: 19%;
+  transform: translateX(-50%);
+  font-size: 21px; font-weight: 700;
+  letter-spacing: 0.5em; text-indent: 0.5em; color: #ff6a00;
+}
+#eva .ev-lock-frame {
+  position: absolute; left: 50%; top: 49%;
+  transform: translate(-50%, -50%);
+  width: 196px; height: 196px;
+  display: flex; align-items: center; justify-content: center;
+}
+#eva .ev-hexring {
+  position: absolute; inset: -28px;
   clip-path: polygon(50% 0%, 93.3% 25%, 93.3% 75%, 50% 100%, 6.7% 75%, 6.7% 25%);
   background: #ff6a00;
-  opacity: 0;
 }
-#eva .ev-hex::after {
-  content: '';
-  position: absolute; inset: 3px;
+#eva .ev-hexring::after {
+  content: ''; position: absolute; inset: 2px;
   clip-path: polygon(50% 0%, 93.3% 25%, 93.3% 75%, 50% 100%, 6.7% 75%, 6.7% 25%);
-  background: #050505;
-}
-#eva .ev-target {
-  position: absolute; left: 50%; top: 50%;
-  transform: translate(-50%, -50%);
-  display: flex; flex-direction: column; align-items: center; gap: 18px;
+  background: #040404;
 }
 #eva .ev-cover {
-  width: 150px; height: 150px; object-fit: cover;
+  position: relative; z-index: 1;
+  width: 196px; height: 196px; object-fit: cover;
   clip-path: polygon(30% 0, 70% 0, 100% 30%, 100% 70%, 70% 100%, 30% 100%, 0 70%, 0 30%);
-  filter: grayscale(1) contrast(1.15) brightness(0.9);
+  filter: grayscale(1) contrast(1.15) brightness(0.82);
 }
-#eva .ev-target-text {
+#eva .ev-lock-title {
+  position: absolute; left: 50%; top: 71%;
+  transform: translateX(-50%);
+  font-size: 34px; font-weight: 800; letter-spacing: 0.06em; color: #f2f0e8;
+  max-width: 78%; text-align: center;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+#eva .ev-lock-artist {
+  position: absolute; left: 50%; top: 79%;
+  transform: translateX(-50%);
   font-family: "SF Mono", Menlo, monospace;
-  font-size: 13px; letter-spacing: 2px; color: #9dff00;
-  max-width: 70vw; white-space: nowrap; overflow: hidden;
+  font-size: 13px; letter-spacing: 3px; color: rgba(255,140,40,0.72);
 }
 
 /* ----- roam · desktop-wide kinetic typography / 漫游 ----- */

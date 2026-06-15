@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>echo · 歌词动画机制 / lyric motion</title>
+<style>
+  :root { --ui: rgba(255,255,255,0.85); --dim: rgba(255,255,255,0.5); --accent: #8a7bff; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; overflow: hidden; background: #070710; color: var(--ui);
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "PingFang SC", "Hiragino Sans", system-ui, sans-serif; }
+  #bg { position: fixed; inset: 0; z-index: 0; transition: background 1s;
+    background: radial-gradient(ellipse 90% 70% at 50% 40%, color-mix(in srgb, var(--accent) 16%, transparent), transparent 70%), #070710; }
+  #stage { position: fixed; inset: 0; z-index: 1; }
+  #root { position: absolute; inset: 0; }
+
+  .center { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; padding:0 8%; }
+  .line { font-size: 46px; font-weight: 800; letter-spacing: .5px; text-align: center; line-height: 1.25; }
+  .c { display: inline-block; white-space: pre; }
+
+  /* assemble */
+  .asm .c { transition: transform .8s cubic-bezier(.16,1.1,.3,1), opacity .6s, filter .6s; }
+  /* rack focus */
+  .rack .c { transition: filter .5s ease, opacity .5s, transform .5s; }
+  /* jelly */
+  @keyframes jelly { 0%{transform:scale(0.4,1.4) translateY(40px);opacity:0}
+    40%{transform:scale(1.18,0.82);opacity:1} 60%{transform:scale(0.92,1.08)}
+    80%{transform:scale(1.04,0.97)} 100%{transform:scale(1,1)} }
+  .jelly .line { animation: jelly .9s cubic-bezier(.2,.8,.2,1) both; transform-origin:center bottom; }
+  /* punch (per-word overshoot) */
+  .punch .w { display:inline-block; white-space:pre; transition: transform .42s cubic-bezier(.18,1.4,.4,1), color .3s, text-shadow .3s;
+    color: rgba(255,255,255,0.4); }
+  .punch .w.hit { transform: scale(1.32); color:#fff; text-shadow:0 0 24px color-mix(in srgb,var(--accent) 80%,#fff); }
+  /* decode */
+  .decode .c { color: color-mix(in srgb, var(--accent) 75%, #fff); }
+  .decode .c.locked { color:#fff; }
+  /* ember exit handled in JS */
+  .ember .c { transition: transform 1.1s ease-out, opacity 1.1s, filter 1.1s, color 1.1s; }
+  /* depth tunnel */
+  #root.depthMode { perspective: 900px; perspective-origin: 50% 50%; }
+  .depthLine { position:absolute; left:8%; right:8%; top:50%; text-align:center; font-size:46px; font-weight:800;
+    transform: translateY(-50%) translateZ(-700px); opacity:0; filter:blur(10px); will-change: transform,opacity,filter;
+    transition: transform 1.6s cubic-bezier(.3,.5,.2,1), opacity 1.4s, filter 1.4s; }
+  .depthLine.here { transform: translateY(-50%) translateZ(0); opacity:1; filter:blur(0); }
+  .depthLine.past { transform: translateY(-50%) translateZ(520px); opacity:0; filter:blur(8px); }
+  /* poster */
+  .posterLine { position:absolute; font-weight:800; transform-origin:center; opacity:0;
+    transition: opacity .8s, transform .9s cubic-bezier(.2,.8,.2,1); white-space:nowrap; }
+  .posterLine.in { opacity:1; }
+
+  /* ── controls (shared) ── */
+  #panel { position: fixed; top: 18px; left: 18px; width: 250px; z-index: 10;
+    background: rgba(14,14,20,0.55); backdrop-filter: blur(22px) saturate(1.4); -webkit-backdrop-filter: blur(22px) saturate(1.4);
+    border: 1px solid rgba(255,255,255,0.1); border-radius: 16px; padding: 14px; box-shadow: 0 18px 50px rgba(0,0,0,.5); transition: opacity .3s; }
+  body.hide-ui #panel, body.hide-ui #transport, body.hide-ui #desc, body.hide-ui #hud { opacity:0; pointer-events:none; }
+  #panel h1 { font-size: 12px; font-weight: 700; letter-spacing: .8px; text-transform: uppercase; color: var(--dim); margin-bottom: 10px; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .styleBtn { appearance:none; border:1px solid rgba(255,255,255,0.12); background:rgba(255,255,255,0.04); color:var(--ui);
+    border-radius:10px; padding:8px 6px; font-size:12px; cursor:pointer; text-align:left; line-height:1.2; transition:all .15s; }
+  .styleBtn:hover { background: rgba(255,255,255,0.1); } .styleBtn.active { background: rgba(255,255,255,0.16); border-color: rgba(255,255,255,0.5); }
+  .styleBtn .en { display:block; font-size:9px; color:var(--dim); margin-top:2px; }
+  .row { display:flex; align-items:center; gap:8px; margin-top:12px; font-size:12px; } .row label { flex:1; color:var(--dim); }
+  input[type=color] { width:30px; height:24px; border:none; border-radius:6px; background:none; cursor:pointer; }
+  #transport { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); z-index: 10; display:flex; align-items:center; gap:12px;
+    background: rgba(14,14,20,0.55); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); border:1px solid rgba(255,255,255,0.1);
+    border-radius:999px; padding:8px 16px; transition:opacity .3s; }
+  #playBtn { appearance:none; border:none; background:#fff; color:#000; width:30px; height:30px; border-radius:50%; cursor:pointer; font-size:13px; }
+  #bar { width:320px; height:5px; background:rgba(255,255,255,0.18); border-radius:3px; cursor:pointer; position:relative; }
+  #fill { position:absolute; left:0; top:0; bottom:0; width:0; background:#fff; border-radius:3px; }
+  #time { font-size:11px; color:var(--dim); font-variant-numeric:tabular-nums; min-width:70px; }
+  #desc { position: fixed; bottom: 70px; left: 50%; transform: translateX(-50%); z-index: 10; max-width: 580px; text-align:center; font-size:12px; color:var(--dim); line-height:1.6; transition:opacity .3s; }
+  #desc b { color: var(--ui); }
+  #hud { position: fixed; top: 18px; right: 18px; z-index: 10; font-size:11px; color:var(--dim); text-align:right; line-height:1.7; transition:opacity .3s; }
+  kbd { background: rgba(255,255,255,0.12); border-radius:4px; padding:1px 5px; font-size:10px; font-family: ui-monospace, Menlo, monospace; }
+</style>
+</head>
+<body>
+  <div id="bg"></div>
+  <div id="stage"><div id="root"></div></div>
+
+  <div id="panel">
+    <h1>歌词动画机制</h1>
+    <div class="grid" id="styleGrid"></div>
+    <div class="row"><label>主色调</label><input type="color" id="accent" value="#8a7bff" /></div>
+  </div>
+  <div id="transport"><button id="playBtn">❚❚</button><div id="bar"><div id="fill"></div></div><div id="time">0:00 / 0:00</div></div>
+  <div id="hud"><div><kbd>space</kbd> 播放 · <kbd>← →</kbd> 机制 · <kbd>H</kbd> UI</div></div>
+  <div id="desc"><b id="descTitle"></b> — <span id="descText"></span></div>
+
+<script>
+// ── timed looping song (word-level) ──
+function Ln(t,end,text){ const ws=text.split(' '),n=ws.length,st=(end-t)/n;
+  return {t,end,text,words:ws.map((w,i)=>({w:(i?' '+w:w),t:t+i*st,end:t+(i+1)*st}))}; }
+const SONG=[
+  Ln(1.0,4.6,"City lights blur into the rain"),
+  Ln(5.0,8.6,"I trace your name on the glass"),
+  Ln(9.0,12.6,"every heartbeat a fading train"),
+  Ln(13.0,16.6,"neon bleeds before it dies"),
+  Ln(17.0,20.6,"hold the night a little longer"),
+  Ln(21.0,24.8,"before the morning takes you away"),
+];
+const LOOP=27.0;
+let playing=true, base=performance.now(), seek=0;
+function nowT(){ const t=playing?(performance.now()-base)/1000+seek:seek; return ((t%LOOP)+LOOP)%LOOP; }
+function setSeek(s){ seek=((s%LOOP)+LOOP)%LOOP; base=performance.now(); }
+function activeIndex(t){ let a=-1; for(let i=0;i<SONG.length;i++) if(t>=SONG[i].t) a=i; return a; }
+
+const root=document.getElementById('root');
+const GLYPHS=[..."アイウエオカキクケコサシabcdef0123#%&@*▒░▓ABXYZ"];
+let R=null;
+
+// ════════════════════ MOTION MECHANICS ════════════════════
+const M = {
+  // 1) chars fly in from chaos & spring to place; scatter out on exit
+  assemble:{ cn:'聚合', en:'assemble / scatter', mode:'',
+    desc:'每个字从随机的位置、旋转、缩放中<b>弹性归位</b>组成句子；换行时旧句炸散成碎屑飞走。混沌→秩序→混沌。',
+    enter(box,line){ box.className='center asm'; const el=mk(line); box.appendChild(el);
+      [...el.children].forEach((c,i)=>{ const ang=Math.random()*6.28, r=160+Math.random()*220;
+        c.style.transform=`translate(${Math.cos(ang)*r}px,${Math.sin(ang)*r}px) rotate(${(Math.random()*2-1)*180}deg) scale(${0.2+Math.random()*0.6})`;
+        c.style.opacity=0; c.style.filter='blur(6px)';
+        requestAnimationFrame(()=>requestAnimationFrame(()=>{ c.style.transitionDelay=(i*0.02)+'s';
+          c.style.transform='none'; c.style.opacity=1; c.style.filter='blur(0)'; })); }); },
+    exit(el){ [...el.children].forEach((c,i)=>{ const ang=Math.random()*6.28,r=180+Math.random()*220;
+        c.style.transitionDelay='0s';
+        c.style.transform=`translate(${Math.cos(ang)*r}px,${Math.sin(ang)*r}px) rotate(${(Math.random()*2-1)*220}deg) scale(.3)`;
+        c.style.opacity=0; c.style.filter='blur(8px)'; }); } },
+
+  // 2) chars start blurred, focus pulls across them one by one
+  rack:{ cn:'拉焦', en:'rack focus', mode:'',
+    desc:'整句先重度<b>失焦</b>，再像镜头对焦一样从左到右把字一个个「拉清晰」。摄影感，呼吸悠长。',
+    enter(box,line){ box.className='center rack'; const el=mk(line); box.appendChild(el);
+      [...el.children].forEach((c,i)=>{ c.style.filter='blur(14px)'; c.style.opacity='0.15'; c.style.transform='scale(1.12)';
+        requestAnimationFrame(()=>requestAnimationFrame(()=>{ c.style.transitionDelay=(i*0.05)+'s';
+          c.style.filter='blur(0)'; c.style.opacity='1'; c.style.transform='scale(1)'; })); }); },
+    exit(el){ [...el.children].forEach((c,i)=>{ c.style.transitionDelay=(i*0.02)+'s'; c.style.filter='blur(14px)'; c.style.opacity='0'; }); } },
+
+  // 3) soft-body jelly wobble on entrance
+  jelly:{ cn:'果冻', en:'jelly / soft-body', mode:'',
+    desc:'整句像<b>果冻</b>一样 Q 弹弹出——挤压、回弹、阻尼振荡到稳定。软软的、有重量、好玩。',
+    enter(box,line){ box.className='center jelly'; box.appendChild(mk(line)); },
+    exit(el){ el.style.transition='transform .4s, opacity .4s'; el.style.transform='scale(1.15,0.6)'; el.style.opacity='0'; } },
+
+  // 4) per-word overshoot scale, synced to word timing (rhythm)
+  punch:{ cn:'弹性强调', en:'word punch', mode:'', perWord:true,
+    desc:'每个词在<b>它被唱到的瞬间</b>过冲放大再弹回（动画十二原则的预备-发力）。跟着节奏一拳一拳打出来。',
+    enter(box,line){ box.className='center punch'; const el=document.createElement('div'); el.className='line';
+      this.ws=[]; line.words.forEach(wd=>{ const s=document.createElement('span'); s.className='w'; s.textContent=wd.w; el.appendChild(s); this.ws.push(s); });
+      box.appendChild(el); this.line=line; },
+    tick(t){ if(!this.ws) return; this.ws.forEach((s,i)=>{ const w=this.line.words[i];
+        const hit = t>=w.t && t<w.t+0.5; s.classList.toggle('hit', hit); }); },
+    exit(el){ el.style.transition='opacity .35s'; el.style.opacity='0'; } },
+
+  // 5) glyph scramble that locks in (decode)
+  decode:{ cn:'解码', en:'decode / scramble', mode:'', live:true,
+    desc:'每个字疯狂滚动随机字符，再按位置依次<b>锁定</b>成真正的字母（解密/故障美学）。',
+    enter(box,line){ box.className='center decode'; const el=document.createElement('div'); el.className='line';
+      this.cs=[]; [...line.text].forEach((ch,i)=>{ const s=document.createElement('span'); s.className='c'; s.dataset.f=ch; s.dataset.lock=(0.15+i*0.05).toFixed(3);
+        s.textContent=ch===' '?' ':''; el.appendChild(s); this.cs.push(s); }); box.appendChild(el); this.start=this.curT; },
+    tick(t){ if(!this.cs) return; const e=((t-this.start)%LOOP+LOOP)%LOOP;
+      this.cs.forEach(s=>{ const f=s.dataset.f; if(f===' '){ s.textContent=' '; return; }
+        if(e>=parseFloat(s.dataset.lock)){ s.textContent=f; s.classList.add('locked'); }
+        else s.textContent=GLYPHS[(Math.random()*GLYPHS.length)|0]; }); },
+    exit(el){ el.style.transition='opacity .3s, filter .3s'; el.style.opacity='0'; el.style.filter='blur(4px)'; } },
+
+  // 6) previous line carbonizes into rising embers; new line rises in
+  ember:{ cn:'烬灭', en:'ember dissolve', mode:'',
+    desc:'上一句的字<b>升温、碳化、化作余烬</b>向上飘散；新句自下方升起。呼应余烬主题，离别感很强。',
+    enter(box,line){ box.className='center ember'; const el=mk(line); box.appendChild(el);
+      [...el.children].forEach((c,i)=>{ c.style.transform='translateY(30px)'; c.style.opacity='0';
+        requestAnimationFrame(()=>requestAnimationFrame(()=>{ c.style.transitionDelay=(i*0.02)+'s'; c.style.transform='none'; c.style.opacity='1'; })); }); },
+    exit(el){ [...el.children].forEach((c,i)=>{ c.style.transitionDelay=(i*0.015)+'s';
+        c.style.transform=`translateY(${-60-Math.random()*80}px) translateX(${(Math.random()*2-1)*40}px) scale(.7)`;
+        c.style.opacity='0'; c.style.filter='blur(3px)'; c.style.color='#ff7a2a'; }); } },
+
+  // 7) lines arranged in Z; camera dollies forward (tunnel fly-through)
+  depth:{ cn:'隧道', en:'depth fly-through', mode:'depth',
+    desc:'歌词排在 Z 轴纵深上，镜头持续<b>向前推进</b>：当前句从远处冲到眼前，旧句穿过镜头掠向身后。歌词成了一条走廊。',
+    enter(box,line){ const el=document.createElement('div'); el.className='depthLine'; el.textContent=line.text; box.appendChild(el);
+      requestAnimationFrame(()=>requestAnimationFrame(()=>el.classList.add('here'))); },
+    exit(el){ el.classList.remove('here'); el.classList.add('past'); } },
+
+  // 8) each line lands at a different spot/size/angle → kinetic poster
+  poster:{ cn:'散点海报', en:'kinetic poster', mode:'',
+    desc:'每句落在屏幕<b>不同位置、大小、角度</b>，旧句留痕渐隐，堆成一张会生长的动态排版海报。',
+    anchors:[{l:14,t:22,s:54,r:-6},{l:46,t:40,s:40,r:4},{l:20,t:62,s:48,r:-3},{l:52,t:18,s:44,r:7},{l:24,t:44,s:58,r:-5},{l:48,t:66,s:38,r:5}],
+    enter(box,line,idx){ box.className=''; const a=this.anchors[idx%this.anchors.length];
+      const el=document.createElement('div'); el.className='posterLine'; el.textContent=line.text;
+      el.style.left=a.l+'%'; el.style.top=a.t+'%'; el.style.fontSize=a.s+'px';
+      el.style.transform=`rotate(${a.r}deg) scale(.7)`; box.appendChild(el);
+      requestAnimationFrame(()=>requestAnimationFrame(()=>{ el.classList.add('in'); el.style.transform=`rotate(${a.r}deg) scale(1)`; }));
+      // dim the trail
+      this.trail=this.trail||[]; this.trail.push(el); this.trail.forEach((e,k)=>{ const age=this.trail.length-1-k;
+        if(age>0){ e.style.opacity=Math.max(0,0.5-age*0.16); e.style.filter='blur('+age*0.6+'px)'; } });
+      while(this.trail.length>4){ const old=this.trail.shift(); old.remove(); } },
+    keepTrail:true },
+};
+const ORDER=['assemble','rack','jelly','punch','decode','ember','depth','poster'];
+
+// helper: build a .line with per-char spans
+function mk(line){ const el=document.createElement('div'); el.className='line';
+  [...line.text].forEach(ch=>{ const s=document.createElement('span'); s.className='c'; s.textContent=ch===' '?' ':ch; el.appendChild(s); }); return el; }
+
+// ── driver: detect line change → exit old / enter new; run tick() ──
+let curIdx=-2, curEl=null;
+function setStyle(key){ R=M[key]; curIdx=-2; if(curEl){ /* leave */ } root.innerHTML=''; curEl=null; R.trail=null;
+  root.classList.toggle('depthMode', R.mode==='depth');
+  [...document.querySelectorAll('.styleBtn')].forEach(b=>b.classList.toggle('active',b.dataset.k===key));
+  document.getElementById('descTitle').textContent=`${R.cn} / ${R.en}`;
+  document.getElementById('descText').innerHTML=R.desc; }
+
+function update(t){ R.curT=t; const ai=activeIndex(t);
+  if(ai!==curIdx){ curIdx=ai;
+    if(curEl && R.exit){ const dead=curEl; R.exit(dead); setTimeout(()=>{ if(dead&&dead.parentNode && !R.keepTrail) dead.remove(); }, 1300); }
+    else if(curEl && !R.keepTrail){ curEl.remove(); }
+    if(ai>=0){ if(R.mode==='depth'||R.keepTrail){ R.enter(root,SONG[ai],ai); curEl=root.lastChild; }
+      else { const box=document.createElement('div'); root.appendChild(box); R.enter(box,SONG[ai],ai); curEl=box; } }
+    else curEl=null;
+  }
+  if(R.tick) R.tick(t);
+}
+
+// ── transport + loop ──
+function fmt(s){ s=Math.max(0,s|0); return (s/60|0)+':'+String(s%60).padStart(2,'0'); }
+function tick(){ requestAnimationFrame(tick); const t=nowT(); update(t);
+  document.getElementById('fill').style.width=(t/LOOP*100)+'%';
+  document.getElementById('time').textContent=fmt(t)+' / '+fmt(LOOP); }
+
+const grid=document.getElementById('styleGrid');
+ORDER.forEach(k=>{ const r=M[k]; const b=document.createElement('button'); b.className='styleBtn'; b.dataset.k=k;
+  b.innerHTML=`${r.cn}<span class="en">${r.en}</span>`; b.onclick=()=>setStyle(k); grid.appendChild(b); });
+const playBtn=document.getElementById('playBtn');
+function setPlaying(p){ if(p){ base=performance.now(); playing=true; playBtn.textContent='❚❚'; } else { seek=nowT(); playing=false; playBtn.textContent='▶'; } }
+playBtn.onclick=()=>setPlaying(!playing);
+document.getElementById('bar').onclick=e=>{ const r=e.currentTarget.getBoundingClientRect(); setSeek((e.clientX-r.left)/r.width*LOOP); curIdx=-2; root.innerHTML=''; curEl=null; if(R)R.trail=null; };
+const accentEl=document.getElementById('accent'); accentEl.oninput=()=>document.documentElement.style.setProperty('--accent',accentEl.value);
+document.documentElement.style.setProperty('--accent',accentEl.value);
+addEventListener('keydown',e=>{ const i=ORDER.indexOf([...document.querySelectorAll('.styleBtn.active')][0]?.dataset.k);
+  if(e.key===' '){ e.preventDefault(); setPlaying(!playing); }
+  if(e.key==='ArrowRight') setStyle(ORDER[(i+1)%ORDER.length]);
+  if(e.key==='ArrowLeft') setStyle(ORDER[(i-1+ORDER.length)%ORDER.length]);
+  if(e.key.toLowerCase()==='h') document.body.classList.toggle('hide-ui'); });
+
+setStyle('assemble');
+requestAnimationFrame(tick);
+</script>
+</body>
+</html>

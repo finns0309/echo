@@ -1,0 +1,105 @@
+<!doctype html>
+<!-- karaoke-dev.html — 联调页：加载真实的 renderer/style.css + lrc.js + textpick.js
+     + karaoke.js，用一首带 yrc（逐字）时间轴的假歌驱动 setLines + frame(t)，在浏览器里
+     直接打磨「卡拉OK」主题本体（而非另画一份 demo）。
+     URL 参数:
+       ?mode=yrc     用逐字时间轴（默认，真实卡拉OK同步）
+       ?mode=synth   不传 yrc，走 LRC→synthChars 合成时间轴（兜底路径）
+       ?t=<秒>       冻结在这一刻（截图用）；不传则实时循环播放
+       ?scale=<n>    --fl-scale（默认 1）
+   截图：headless Chrome 下 rAF 被节流，所以这里用 setInterval 驱动 frame()（真实 app 用 rAF）。 -->
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<title>karaoke · dev harness</title>
+<link rel="stylesheet" href="../renderer/style.css">
+<style>
+  html, body { height: 100%; margin: 0; }
+  #devnote {
+    position: fixed; left: 12px; bottom: 10px; z-index: 99;
+    font: 10px/1.5 "SF Mono", Menlo, monospace; letter-spacing: 2px;
+    color: rgba(255, 255, 255, 0.32); pointer-events: none;
+  }
+</style>
+</head>
+<body class="theme-karaoke" data-layout="karaoke">
+
+<div id="bg"></div>
+<div id="tint"></div>
+<div id="karaoke"></div>
+<div id="devnote"></div>
+
+<script>
+// karaoke 不消费音频 onset，这里只保证别的模块（若被引入）加载不报错。
+window.FL_AUDIO = { onOnset() {}, getFrame() { return { rms: 0, centroid: 0.5, t: 0 }; }, frame() {} };
+</script>
+<script src="../renderer/themes.js"></script>
+<script src="../renderer/textpick.js"></script>
+<script src="../renderer/lrc.js"></script>
+<script src="../renderer/karaoke.js"></script>
+<script>
+(function () {
+  const q = new URLSearchParams(location.search);
+  const mode  = q.get('mode') || 'yrc';
+  const scale = parseFloat(q.get('scale') || '1');
+  const frozen = q.has('t') ? parseFloat(q.get('t')) : null;
+
+  // Apply the real karaoke theme tokens (normally app.js does this on theme
+  // switch) so we exercise the shipping palette / sizes, not a demo guess.
+  const theme = (window.FL_THEMES || []).find((t) => t.name === 'karaoke');
+  if (theme) for (const [k, v] of Object.entries(theme.tokens)) document.body.style.setProperty(k, v);
+  // Stand-ins for what the live app derives from the cover.
+  document.body.style.setProperty('--fl-scale', String(scale));
+  document.body.style.setProperty('--accent', 'rgb(150, 120, 255)');
+  document.body.style.setProperty('--accent-glow', 'rgba(150, 120, 255, 0.4)');
+  // A faux cover so the screen isn't flat black.
+  document.body.style.setProperty('--fl-bg-image',
+    'radial-gradient(ellipse 80% 70% at 30% 25%, #3a2a6e, transparent 60%),' +
+    'radial-gradient(ellipse 70% 60% at 80% 80%, #6e2a55, transparent 60%), #160f2e');
+
+  // ── a fake song with real yrc (逐字) timing, so the fill is visible ──
+  // A ~3.5s intro and a real instrumental gap before 世界安静下来 (line ends
+  // 17.2s, next starts 21.0s) so the count-in HUD has somewhere to fire.
+  const YRC = [
+    '[3500,3000](3500,480,0)霓(3980,480,0)虹(4460,480,0)熄(4940,480,0)灭(5420,480,0)之(5900,600,0)前',
+    '[7000,2600](7000,480,0)再(7480,480,0)看(7960,480,0)你(8440,480,0)一(8920,680,0)眼',
+    '[10500,3200](10500,760,0)City (11260,820,0)lights (12080,1000,0)blur',
+    '[14000,3200](14000,520,0)心(14520,520,0)跳(15040,520,0)逐(15560,520,0)渐(16080,520,0)重(16600,700,0)合',
+    '[21000,3000](21000,520,0)世(21520,520,0)界(22040,520,0)安(22560,520,0)静(23080,520,0)下(23600,700,0)来',
+    '[25000,3200](25000,520,0)再(25520,520,0)靠(26040,520,0)近(26560,520,0)一(27080,520,0)点(27600,700,0)点',
+  ].join('\n');
+  const LRC = [
+    '[00:03.500]霓虹熄灭之前',
+    '[00:07.000]再看你一眼',
+    '[00:10.500]City lights blur',
+    '[00:14.000]心跳逐渐重合',
+    '[00:21.000]世界安静下来',
+    '[00:25.000]再靠近一点点',
+  ].join('\n');
+  const TLYRIC = [
+    '[00:10.500]城市灯火在雨里模糊',
+    '[00:21.000]世界在此刻安静下来',
+  ].join('\n');
+  const LOOP = 30.0;
+
+  const kLines = window.LRC.buildKaraoke(LRC, TLYRIC, mode === 'synth' ? '' : YRC);
+  document.getElementById('devnote').textContent =
+    'KARAOKE DEV — mode:' + mode + (frozen != null ? ' · t=' + frozen + 's' : ' · play')
+    + ' · units/line:' + kLines.map((l) => l.chars.length).join(',');
+
+  FL_KARAOKE.start();
+  FL_KARAOKE.setLines(kLines, { title: '夜行 / Night Drive' });
+
+  // setInterval (not rAF) so the clock advances under headless virtual-time.
+  let base = performance.now();
+  setInterval(() => {
+    let t;
+    if (frozen != null) t = frozen;
+    else t = ((performance.now() - base) / 1000) % LOOP;
+    FL_KARAOKE.frame(t);
+  }, 16);
+})();
+</script>
+
+</body>
+</html>

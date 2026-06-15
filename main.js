@@ -139,6 +139,11 @@ function resolveWindowProfile(name) {
       return { width: wa.width, height: 120, x: wa.x, y: wa.y + wa.height - 140, clickThrough: true };
     case 'card':     // 380×520 右悬 — imsg/duet conversation
       return { width: 380, height: 520, x: wa.x + wa.width - 400, y: wa.y + 60, clickThrough: false };
+    case 'karaoke': {// 居中卡拉OK屏 — 宽幅面板，跟唱时能读到上下文行 + 逐字填充
+      const kw = Math.min(760, wa.width - 80);
+      const kh = Math.min(420, wa.height - 120);
+      return { width: kw, height: kh, x: wa.x + Math.round((wa.width - kw) / 2), y: wa.y + Math.round((wa.height - kh) * 0.32), clickThrough: false };
+    }
     case 'hanging':  // 300×470 顶部右侧垂挂 — furin 风铃 (cord hangs from the window top edge)
       return { width: 300, height: 470, x: wa.x + wa.width - 330, y: wa.y, clickThrough: false };
     case 'tall-card': // 380×720 右侧竖卡 — ticket 镭射票 (vertical holo ticket + stub pile)

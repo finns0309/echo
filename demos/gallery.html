@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>echo · 生成艺术画廊 / generative gallery</title>
+<style>
+  :root { --ui: rgba(255,255,255,0.85); --dim: rgba(255,255,255,0.5); }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; overflow: hidden; background: #000; color: var(--ui);
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", system-ui, sans-serif; }
+  #stage { position: fixed; inset: 0; }
+  canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+  #c2d { z-index: 1; } #gl { z-index: 1; }
+  #panel { position: fixed; top: 18px; left: 18px; width: 256px; z-index: 10;
+    background: rgba(14,14,20,0.55); backdrop-filter: blur(22px) saturate(1.4);
+    -webkit-backdrop-filter: blur(22px) saturate(1.4);
+    border: 1px solid rgba(255,255,255,0.1); border-radius: 16px; padding: 14px;
+    box-shadow: 0 18px 50px rgba(0,0,0,.5); transition: transform .3s, opacity .3s; }
+  body.hide-ui #panel { transform: translateX(-310px); opacity: 0; }
+  #panel h1 { font-size: 12px; font-weight: 700; letter-spacing: .8px; text-transform: uppercase; color: var(--dim); margin-bottom: 10px; }
+  .lane { font-size: 9px; letter-spacing: .5px; color: var(--dim); margin: 10px 0 4px; text-transform: uppercase; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .styleBtn { appearance: none; border: 1px solid rgba(255,255,255,0.12); background: rgba(255,255,255,0.04);
+    color: var(--ui); border-radius: 10px; padding: 7px 6px; font-size: 12px; cursor: pointer; text-align: left; line-height: 1.2; transition: all .15s; }
+  .styleBtn:hover { background: rgba(255,255,255,0.1); }
+  .styleBtn.active { background: rgba(255,255,255,0.16); border-color: rgba(255,255,255,0.5); }
+  .styleBtn .en { display: block; font-size: 9px; color: var(--dim); margin-top: 2px; }
+  .row { display: flex; align-items: center; gap: 8px; margin-top: 12px; font-size: 12px; }
+  .row label { flex: 1; color: var(--dim); }
+  input[type=range] { flex: 1.2; accent-color: #fff; }
+  input[type=color] { width: 30px; height: 24px; border: none; border-radius: 6px; background: none; cursor: pointer; }
+  #desc { position: fixed; bottom: 18px; left: 18px; z-index: 10; max-width: 460px; font-size: 12px; color: var(--dim); line-height: 1.6; transition: opacity .3s; }
+  body.hide-ui #desc { opacity: 0; }
+  #desc b { color: var(--ui); font-weight: 600; }
+  kbd { background: rgba(255,255,255,0.12); border-radius: 4px; padding: 1px 5px; font-size: 10px; font-family: ui-monospace, Menlo, monospace; }
+  #hud { position: fixed; top: 18px; right: 18px; z-index: 10; font-size: 11px; color: var(--dim); text-align: right; line-height: 1.7; transition: opacity .3s; }
+  body.hide-ui #hud { opacity: 0; }
+</style>
+</head>
+<body>
+  <div id="stage">
+    <canvas id="gl"></canvas>
+    <canvas id="c2d"></canvas>
+  </div>
+
+  <div id="panel">
+    <h1>生成艺术画廊</h1>
+    <div id="styleGrid"></div>
+    <div class="row"><label>主色调</label><input type="color" id="accent" value="#9b7cff" /></div>
+    <div class="row"><label>速度</label><input type="range" id="speed" min="0.1" max="3" step="0.05" value="1" /></div>
+  </div>
+  <div id="hud"><div id="fps">– fps</div><div>← → 切换 · <kbd>H</kbd> 隐藏 UI</div></div>
+  <div id="desc"><b id="descTitle"></b> <span id="descLane"></span> — <span id="descText"></span></div>
+
+<script>
+// ════════════════════════════════════════════════════════════════════
+//  Two stacked canvases: #gl (WebGL: shaders + FBO feedback) and #c2d
+//  (Canvas2D: particle systems). Only the active style's canvas is shown.
+//  Every style is self-animating — beautiful sitting still, no music needed.
+// ════════════════════════════════════════════════════════════════════
+const glCanvas = document.getElementById('gl');
+const c2d = document.getElementById('c2d').getContext('2d');
+const c2dCanvas = document.getElementById('c2d');
+const gl = glCanvas.getContext('webgl', { alpha:false, antialias:false, preserveDrawingBuffer:false });
+const DPR = Math.min(window.devicePixelRatio || 1, 2);
+
+// ── shared GLSL prelude ──────────────────────────────────────────────
+const PRELUDE = `
+precision highp float;
+uniform vec2 uRes; uniform float uTime; uniform vec3 uAccent; uniform float uDayT;
+float hash21(vec2 p){ vec3 p3=fract(vec3(p.xyx)*0.1031); p3+=dot(p3,p3.yzx+33.33); return fract((p3.x+p3.y)*p3.z); }
+float noise(vec2 p){ vec2 i=floor(p),f=fract(p);
+  float a=hash21(i),b=hash21(i+vec2(1.,0.)),c=hash21(i+vec2(0.,1.)),d=hash21(i+vec2(1.,1.));
+  vec2 u=f*f*(3.-2.*f); return mix(mix(a,b,u.x),mix(c,d,u.x),u.y); }
+float fbm(vec2 p){ float v=0.,a=.5; for(int i=0;i<6;i++){ v+=a*noise(p); p*=2.; a*=.5; } return v; }
+mat2 rot(float a){ float c=cos(a),s=sin(a); return mat2(c,-s,s,c); }
+vec3 pal(float t, vec3 a, vec3 b, vec3 c, vec3 d){ return a + b*cos(6.28318*(c*t+d)); }
+`;
+const VERT = `attribute vec2 aPos; void main(){ gl_Position=vec4(aPos,0.,1.); }`;
+
+// ════════════════════════ STYLE DEFINITIONS ═════════════════════════
+const STYLES = [
+// ─────────── 生成艺术 (Canvas2D 粒子) ───────────
+{ id:'phyllo', cn:'叶序螺旋', en:'phyllotaxis', lane:'生成艺术', type:'2d',
+  desc:'黄金角 137.5° 排布的种子点阵，整体缓慢旋转、彩虹流转。向日葵/松果的数学，极简催眠。',
+  frame(t,dt,w,h,acc,spd){
+    c2d.fillStyle='rgba(8,8,14,0.28)'; c2d.fillRect(0,0,w,h);
+    const cx=w/2, cy=h/2, n=950, g=Math.PI*(3-Math.sqrt(5)), c=Math.min(w,h)*0.019, rot=t*0.05*spd;
+    for(let i=0;i<n;i++){ const a=i*g+rot, r=c*Math.sqrt(i);
+      const x=cx+Math.cos(a)*r, y=cy+Math.sin(a)*r;
+      const hue=(acc.h + i*0.5 + t*18*spd)%360;
+      const sz=Math.max(0.6, 3.4 - r/(Math.min(w,h)*0.55)*2.4);
+      c2d.beginPath(); c2d.arc(x,y,sz,0,6.2832);
+      c2d.fillStyle=`hsl(${hue},72%,${56+18*Math.sin(i*0.05+t)}%)`; c2d.fill();
+    }
+  }},
+
+{ id:'flow', cn:'流场光丝', en:'flow field', lane:'生成艺术', type:'2d',
+  desc:'两千个粒子沿噪声流场漂移，留下渐隐的发光轨迹，像洋流/极光的丝线。永不重复。',
+  init(w,h){ this.ps=[]; for(let i=0;i<2000;i++) this.ps.push({x:Math.random()*w,y:Math.random()*h,px:0,py:0}); },
+  frame(t,dt,w,h,acc,spd){
+    c2d.fillStyle='rgba(6,7,12,0.055)'; c2d.fillRect(0,0,w,h);
+    c2d.globalCompositeOperation='lighter'; c2d.lineWidth=1.1;
+    const step=spd*1.5*Math.min(dt*60,2);
+    for(const p of this.ps){
+      const a=vnoise(p.x*0.0016, p.y*0.0016 + t*0.04)*Math.PI*4.0;
+      p.px=p.x; p.py=p.y; p.x+=Math.cos(a)*step; p.y+=Math.sin(a)*step;
+      if(p.x<0||p.x>w||p.y<0||p.y>h){ p.x=Math.random()*w; p.y=Math.random()*h; p.px=p.x; p.py=p.y; continue; }
+      const hue=(acc.h + (a*30) + t*12)%360;
+      c2d.strokeStyle=`hsla(${hue},82%,66%,0.5)`;
+      c2d.beginPath(); c2d.moveTo(p.px,p.py); c2d.lineTo(p.x,p.y); c2d.stroke();
+    }
+    c2d.globalCompositeOperation='source-over';
+  }},
+
+{ id:'clifford', cn:'吸引子', en:'clifford attractor', lane:'生成艺术', type:'2d',
+  desc:'Clifford 奇异吸引子，参数随时间缓动让形态不断重塑。加法发光的点云，越看越深。',
+  init(){ this.x=0.1; this.y=0.1; },
+  frame(t,dt,w,h,acc,spd){
+    c2d.fillStyle='rgba(10,8,16,0.085)'; c2d.fillRect(0,0,w,h);
+    c2d.globalCompositeOperation='lighter';
+    const A=1.7+Math.sin(t*0.03*spd)*0.9, B=1.7+Math.cos(t*0.025*spd)*0.9,
+          C=0.6+Math.sin(t*0.02*spd)*0.45, D=1.2+Math.cos(t*0.018*spd)*0.45;
+    const sc=Math.min(w,h)/4.4, cx=w/2, cy=h/2;
+    c2d.fillStyle=`hsla(${acc.h},85%,62%,0.42)`;
+    let x=this.x, y=this.y;
+    for(let i=0;i<16000;i++){
+      const nx=Math.sin(A*y)+C*Math.cos(A*x), ny=Math.sin(B*x)+D*Math.cos(B*y);
+      x=nx; y=ny; c2d.fillRect(cx+nx*sc, cy+ny*sc, 1, 1);
+    }
+    this.x=x; this.y=y; c2d.globalCompositeOperation='source-over';
+  }},
+
+{ id:'stars', cn:'星海', en:'starfield', lane:'生成艺术', type:'2d',
+  desc:'穿行星海的视差飞行，近星拖出光条，远处弥漫星云。经典深空，沉静辽阔。',
+  init(w,h){ this.s=[]; for(let i=0;i<700;i++) this.s.push({x:(Math.random()*2-1),y:(Math.random()*2-1),z:Math.random()}); },
+  frame(t,dt,w,h,acc,spd){
+    c2d.fillStyle='rgba(4,4,10,0.35)'; c2d.fillRect(0,0,w,h);
+    const cx=w/2, cy=h/2, f=Math.min(w,h)*0.9;
+    c2d.globalCompositeOperation='lighter';
+    for(const st of this.s){
+      const pz=st.z; st.z-=0.004*spd*Math.min(dt*60,2);
+      if(st.z<=0.02){ st.x=Math.random()*2-1; st.y=Math.random()*2-1; st.z=1; continue; }
+      const sx=cx+st.x/st.z*f, sy=cy+st.y/st.z*f;
+      const px=cx+st.x/pz*f, py=cy+st.y/pz*f;
+      const b=Math.min(1,(1-st.z)*1.3), sz=Math.max(0.4,(1-st.z)*2.6);
+      c2d.strokeStyle=`hsla(${acc.h},40%,${70+25*b}%,${b})`; c2d.lineWidth=sz;
+      c2d.beginPath(); c2d.moveTo(px,py); c2d.lineTo(sx,sy); c2d.stroke();
+    }
+    c2d.globalCompositeOperation='source-over';
+  }},
+
+// ─────────── 材质与光 (单 pass shader) ───────────
+{ id:'iris', cn:'虹彩油膜', en:'iridescent', lane:'材质与光', type:'shader',
+  desc:'薄膜干涉的彩虹流光——肥皂泡/鲍鱼壳/CD 背面那种随角度滑动的金属虹彩。高级感天花板。',
+  frag:`void main(){
+    vec2 uv=gl_FragCoord.xy/uRes; float a=uRes.x/uRes.y; vec2 p=vec2(uv.x*a,uv.y);
+    float t=uTime*0.15;
+    float th=fbm(p*1.8+vec2(t,t*0.6)) + 0.5*fbm(p*4.0-t);   // "film thickness"
+    float view=fbm(p*0.7+t*0.3);
+    float phase=th*5.0 + view*2.0 + uv.x*0.5;
+    vec3 col=pal(phase, vec3(0.5), vec3(0.5), vec3(1.0,0.9,0.8), vec3(0.0,0.33,0.67));
+    col=mix(col, col*uAccent*1.6, 0.25);
+    col*=0.6+0.6*smoothstep(0.2,0.8,th);
+    col+=pow(smoothstep(0.7,1.0,th),3.0)*0.5;               // sheen highlights
+    gl_FragColor=vec4(col,1.0);
+  }`},
+
+{ id:'chrome', cn:'液态铬', en:'liquid metal', lane:'材质与光', type:'shader',
+  desc:'扭曲法线反射出的金属流体，冷调、奢侈、缓缓蠕动。像水银或抛光钢的表面。',
+  frag:`void main(){
+    vec2 uv=gl_FragCoord.xy/uRes; float a=uRes.x/uRes.y; vec2 p=vec2(uv.x*a,uv.y)*2.2; float t=uTime*0.2;
+    float e=0.012;
+    float h =fbm(p+vec2(t,0.0));
+    float hx=fbm(p+vec2(e+t,0.0)), hy=fbm(p+vec2(0.0,e));
+    vec3 n=normalize(vec3((h-hx)/e,(h-hy)/e,1.0));
+    vec3 v=vec3(0.0,0.0,1.0); vec3 r=reflect(-v,n);
+    vec3 env=mix(vec3(0.06,0.08,0.12), vec3(0.85,0.92,1.0), r.y*0.5+0.5);
+    env=mix(env, uAccent, 0.18);
+    float spec=pow(max(0.0,r.y),8.0);
+    vec3 col=env + spec*0.8 + pow(fract(h*3.0),6.0)*0.15;
+    gl_FragColor=vec4(col,1.0);
+  }`},
+
+{ id:'godray', cn:'丁达尔光', en:'god rays', lane:'材质与光', type:'shader',
+  desc:'体积光束穿过缓动的云隙缓缓扫过，像清晨树林或教堂彩窗。温暖、神圣、安静。',
+  frag:`void main(){
+    vec2 uv=gl_FragCoord.xy/uRes; float a=uRes.x/uRes.y;
+    vec2 light=vec2(0.62,0.92); vec2 dir=(light-uv);
+    float rays=0.0; vec2 s=uv; float decay=0.96, w=0.5;
+    for(int i=0;i<48;i++){ s+=dir*0.018;
+      float m=smoothstep(0.4,0.9, fbm(vec2(s.x*a,s.y)*3.0+vec2(uTime*0.08,0.0)));
+      rays+=m*w; w*=decay; }
+    rays/=18.0;
+    vec3 base=mix(vec3(0.04,0.05,0.09), vec3(0.10,0.09,0.14), uv.y);
+    vec3 warm=mix(uAccent, vec3(1.0,0.92,0.7), 0.5);
+    vec3 col=base + warm*rays*1.4 + warm*pow(smoothstep(0.25,0.0,distance(uv,light)),2.0)*0.6;
+    gl_FragColor=vec4(col,1.0);
+  }`},
+
+// ─────────── 场景 / 远方 (单 pass shader) ───────────
+{ id:'vista', cn:'视差远景', en:'parallax vista', lane:'场景·远方', type:'shader',
+  desc:'分层山峦在流动的雾气中渐隐，每层以不同速度漂移。一扇望向远方的窗，活的壁纸。',
+  frag:`void main(){
+    vec2 uv=gl_FragCoord.xy/uRes; float a=uRes.x/uRes.y;
+    vec3 sky=mix(vec3(0.93,0.78,0.66), vec3(0.30,0.35,0.62), smoothstep(0.2,1.0,uv.y));
+    sky=mix(sky, mix(sky,uAccent,0.5), 0.18);
+    float sun=smoothstep(0.16,0.0,distance(vec2(uv.x*a,uv.y),vec2(0.62*a,0.62)));
+    sky+=mix(uAccent,vec3(1.0,0.85,0.6),0.6)*sun*0.7;
+    vec3 col=sky;
+    for(int i=0;i<5;i++){ float fi=float(i);
+      float speed=0.01+fi*0.012; float scale=1.5+fi*1.3;
+      float base=0.62-fi*0.10;
+      float ridge=base + (fbm(vec2(uv.x*scale + uTime*speed + fi*9.0, fi))-0.5)*0.22;
+      float m=smoothstep(ridge+0.004, ridge-0.004, uv.y);
+      vec3 layer=mix(vec3(0.42,0.45,0.62), vec3(0.06,0.07,0.13), fi/4.0);
+      layer=mix(layer, layer*mix(vec3(1.0),uAccent,0.3), 0.2);
+      col=mix(col, layer, m);
+    }
+    col+= (1.0-uv.y)*0.04;
+    gl_FragColor=vec4(col,1.0);
+  }`},
+
+{ id:'timeofday', cn:'时辰', en:'time of day', lane:'信息即艺术', type:'shader',
+  desc:'画面跟随你电脑的真实时间：晨曦→正午→黄昏→星夜，太阳/月亮沿天弧移动，夜里星辰浮现。既好看又是一只「天空时钟」。',
+  frag:`void main(){
+    vec2 uv=gl_FragCoord.xy/uRes; float a=uRes.x/uRes.y;
+    float d=uDayT;                                  // 0..1 over 24h (from real clock)
+    float sunUp=clamp(sin((d-0.25)*6.2831),-1.0,1.0); // +noon -midnight
+    vec3 night=vec3(0.02,0.03,0.10), dawn=vec3(0.95,0.55,0.42), day=vec3(0.40,0.62,0.95);
+    float dayf=smoothstep(-0.1,0.4,sunUp), duskf=smoothstep(0.4,-0.2,abs(sunUp-0.05))*0.0;
+    vec3 top=mix(night, day, dayf);
+    vec3 bot=mix(mix(night,dawn,clamp(1.0-abs(sunUp)*2.0,0.0,1.0)), mix(day,vec3(0.85,0.9,1.0),0.4), dayf);
+    vec3 sky=mix(bot, top, smoothstep(0.0,1.0,uv.y));
+    sky=mix(sky, mix(sky,uAccent,0.5), 0.12);
+    // sun/moon arc
+    float ang=(d-0.25)*6.2831; vec2 body=vec2(0.5+0.42*cos(ang)*a/a, 0.18+0.6*sin(ang));
+    float bd=distance(vec2(uv.x*a,uv.y), vec2(body.x*a,body.y));
+    vec3 col=sky;
+    if(sunUp>0.0) col+=mix(uAccent,vec3(1.0,0.92,0.7),0.6)*smoothstep(0.10,0.0,bd)*1.2;
+    else col+=vec3(0.9,0.93,1.0)*smoothstep(0.05,0.0,bd)*1.0;
+    // stars at night
+    float ni=smoothstep(0.1,-0.3,sunUp);
+    vec2 sg=floor(uv*uRes/2.5); float s=hash21(sg);
+    col+=step(0.992,s)*ni*(0.4+0.6*sin(uTime*3.0+s*40.0))*smoothstep(0.2,1.0,uv.y);
+    gl_FragColor=vec4(col,1.0);
+  }`},
+
+// ─────────── 模拟之美 (FBO 反馈) ───────────
+{ id:'ink', cn:'墨流', en:'flow ink (FBO)', lane:'模拟之美', type:'fbo',
+  desc:'帧缓冲反馈：每帧把上一帧沿流场平流、衰减，再注入彩色墨源。墨色在“水”中翻卷晕染，最治愈的一类。',
+  sim:`uniform sampler2D uPrev;
+  void main(){
+    vec2 uv=gl_FragCoord.xy/uRes; float a=uRes.x/uRes.y;
+    float ang=fbm(vec2(uv.x*a,uv.y)*3.0+vec2(uTime*0.05,0.0))*12.566;
+    vec2 vel=vec2(cos(ang),sin(ang))*0.0024;
+    vec3 prev=texture2D(uPrev, uv-vel).rgb * 0.985;
+    vec2 s1=vec2(0.5+0.32*sin(uTime*0.27), 0.5+0.30*cos(uTime*0.21));
+    vec2 s2=vec2(0.5+0.30*cos(uTime*0.19+2.0), 0.5+0.33*sin(uTime*0.23+1.0));
+    prev += uAccent * smoothstep(0.05,0.0, distance(vec2(uv.x*a,uv.y),vec2(s1.x*a,s1.y))) * 0.16;
+    vec3 comp=vec3(1.0)-uAccent;
+    prev += comp * smoothstep(0.045,0.0, distance(vec2(uv.x*a,uv.y),vec2(s2.x*a,s2.y))) * 0.13;
+    gl_FragColor=vec4(min(prev,1.2),1.0);
+  }`,
+  show:`uniform sampler2D uPrev;
+  void main(){
+    vec2 uv=gl_FragCoord.xy/uRes; vec3 c=texture2D(uPrev,uv).rgb;
+    c=c/(c+0.6)*1.6;                               // soft tonemap
+    float a=uRes.x/uRes.y; vec2 q=uv-0.5; q.x*=a; c*=1.0-dot(q,q)*0.3;
+    gl_FragColor=vec4(c,1.0);
+  }`},
+];
+
+// ════════════════════════ JS noise (for 2d) ═════════════════════════
+function h2(x,y){ let n=Math.sin(x*127.1+y*311.7)*43758.5453; return n-Math.floor(n); }
+function vnoise(x,y){ const xi=Math.floor(x),yi=Math.floor(y),xf=x-xi,yf=y-yi;
+  const u=xf*xf*(3-2*xf), v=yf*yf*(3-2*yf);
+  const a=h2(xi,yi),b=h2(xi+1,yi),c=h2(xi,yi+1),d=h2(xi+1,yi+1);
+  return a+(b-a)*u+(c-a)*v+(a-b-c+d)*u*v; }
+function rgb2hsl(r,g,b){ const mx=Math.max(r,g,b),mn=Math.min(r,g,b); let h=0;
+  if(mx!==mn){ const dd=mx-mn; if(mx===r) h=((g-b)/dd)%6; else if(mx===g) h=(b-r)/dd+2; else h=(r-g)/dd+4; h*=60; if(h<0)h+=360; }
+  return h; }
+
+// ════════════════════════ WebGL plumbing ════════════════════════════
+function compile(src,type){ const s=gl.createShader(type); gl.shaderSource(s,src); gl.compileShader(s);
+  if(!gl.getShaderParameter(s,gl.COMPILE_STATUS)){ console.error(gl.getShaderInfoLog(s)); return null; } return s; }
+function program(fragBody){ const fs=compile(PRELUDE+'\n'+fragBody,gl.FRAGMENT_SHADER), vs=compile(VERT,gl.VERTEX_SHADER);
+  if(!fs||!vs) return null; const p=gl.createProgram(); gl.attachShader(p,vs); gl.attachShader(p,fs); gl.linkProgram(p);
+  if(!gl.getProgramParameter(p,gl.LINK_STATUS)){ console.error(gl.getProgramInfoLog(p)); return null; }
+  p._u={uRes:gl.getUniformLocation(p,'uRes'),uTime:gl.getUniformLocation(p,'uTime'),uAccent:gl.getUniformLocation(p,'uAccent'),uDayT:gl.getUniformLocation(p,'uDayT'),uPrev:gl.getUniformLocation(p,'uPrev')};
+  p._a=gl.getAttribLocation(p,'aPos'); return p; }
+const quad=gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER,quad);
+gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,1,-1,-1,1,-1,1,1,-1,1,1]),gl.STATIC_DRAW);
+function bindQuad(p){ gl.bindBuffer(gl.ARRAY_BUFFER,quad); gl.enableVertexAttribArray(p._a); gl.vertexAttribPointer(p._a,2,gl.FLOAT,false,0,0); }
+
+// compile all GLSL styles up front
+for(const st of STYLES){
+  if(st.type==='shader'){ st._p=program(st.frag); if(!st._p) st._broken=true; }
+  if(st.type==='fbo'){ st._sim=program(st.sim); st._show=program(st.show); if(!st._sim||!st._show) st._broken=true; }
+}
+
+// ── FBO ping-pong (shared, recreated on resize) ──────────────────────
+let fbA=null, fbB=null, fbW=0, fbH=0, fbSeeded=false;
+function makeTarget(w,h){ const tex=gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D,tex);
+  gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,w,h,0,gl.RGBA,gl.UNSIGNED_BYTE,null);
+  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR); gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);
+  const fb=gl.createFramebuffer(); gl.bindFramebuffer(gl.FRAMEBUFFER,fb);
+  gl.framebufferTexture2D(gl.FRAMEBUFFER,gl.COLOR_ATTACHMENT0,gl.TEXTURE_2D,tex,0);
+  return {tex,fb}; }
+function ensureFBO(w,h){ if(fbW===w&&fbH===h&&fbA) return; fbW=w; fbH=h;
+  fbA=makeTarget(w,h); fbB=makeTarget(w,h); fbSeeded=false; gl.bindFramebuffer(gl.FRAMEBUFFER,null); }
+
+// ════════════════════════ state + loop ══════════════════════════════
+let current=STYLES[0], accent={r:0.6,g:0.49,b:1.0,h:255}, speedMul=1, start=0, lastT=0, frames=0, fpsT=0;
+function setAccent(hex){ const n=parseInt(hex.slice(1),16); accent.r=((n>>16)&255)/255; accent.g=((n>>8)&255)/255; accent.b=(n&255)/255; accent.h=rgb2hsl(accent.r,accent.g,accent.b); }
+
+function sizeGL(scale){ const w=Math.max(1,Math.floor(glCanvas.clientWidth*scale)), h=Math.max(1,Math.floor(glCanvas.clientHeight*scale));
+  if(glCanvas.width!==w||glCanvas.height!==h){ glCanvas.width=w; glCanvas.height=h; } gl.viewport(0,0,w,h); return [w,h]; }
+function sizeC2D(){ const w=Math.floor(c2dCanvas.clientWidth*DPR), h=Math.floor(c2dCanvas.clientHeight*DPR);
+  if(c2dCanvas.width!==w||c2dCanvas.height!==h){ c2dCanvas.width=w; c2dCanvas.height=h; } return [w,h]; }
+
+function frame(now){
+  requestAnimationFrame(frame);
+  if(!start) start=now;
+  const t=(now-start)/1000, dt=lastT?Math.min(0.05,(now-lastT)/1000):0.016; lastT=now;
+  const st=current;
+  if(st.type==='2d'){
+    const [w,h]=sizeC2D();
+    try{ st.frame(t*1.0, dt, w, h, accent, speedMul); }catch(e){ console.error(e); }
+  } else if(st.type==='shader' && !st._broken){
+    const [w,h]=sizeGL(0.75); const p=st._p; gl.useProgram(p); bindQuad(p);
+    gl.uniform2f(p._u.uRes,w,h); gl.uniform1f(p._u.uTime,t*speedMul);
+    gl.uniform3f(p._u.uAccent,accent.r,accent.g,accent.b);
+    const dd=new Date(); gl.uniform1f(p._u.uDayT,(dd.getHours()*3600+dd.getMinutes()*60+dd.getSeconds())/86400);
+    gl.drawArrays(gl.TRIANGLES,0,6);
+  } else if(st.type==='fbo' && !st._broken){
+    const sc=0.5; const w=Math.max(1,Math.floor(glCanvas.clientWidth*sc)), h=Math.max(1,Math.floor(glCanvas.clientHeight*sc));
+    ensureFBO(w,h);
+    // run a few sim steps into fbB from fbA, swap
+    for(let k=0;k<2;k++){
+      gl.bindFramebuffer(gl.FRAMEBUFFER,fbB.fb); gl.viewport(0,0,w,h);
+      const p=st._sim; gl.useProgram(p); bindQuad(p);
+      gl.uniform2f(p._u.uRes,w,h); gl.uniform1f(p._u.uTime,t*speedMul);
+      gl.uniform3f(p._u.uAccent,accent.r,accent.g,accent.b);
+      gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D,fbA.tex); gl.uniform1i(p._u.uPrev,0);
+      gl.drawArrays(gl.TRIANGLES,0,6);
+      const tmp=fbA; fbA=fbB; fbB=tmp;
+    }
+    // display fbA to screen
+    gl.bindFramebuffer(gl.FRAMEBUFFER,null);
+    const [vw,vh]=sizeGL(1.0); const p=st._show; gl.useProgram(p); bindQuad(p);
+    gl.uniform2f(p._u.uRes,vw,vh); gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D,fbA.tex); gl.uniform1i(p._u.uPrev,0);
+    gl.drawArrays(gl.TRIANGLES,0,6);
+  }
+  frames++; if(now-fpsT>500){ document.getElementById('fps').textContent=Math.round(frames*1000/(now-fpsT))+' fps'; frames=0; fpsT=now; }
+}
+
+// ════════════════════════ UI ════════════════════════════════════════
+function setStyle(st){
+  current=st; [...document.querySelectorAll('.styleBtn')].forEach(b=>b.classList.toggle('active',b.dataset.id===st.id));
+  document.getElementById('descTitle').textContent=`${st.cn} / ${st.en}`;
+  document.getElementById('descLane').textContent=`· ${st.lane}`;
+  document.getElementById('descText').textContent=st.desc;
+  const showGL = st.type!=='2d';
+  glCanvas.style.display=showGL?'block':'none'; c2dCanvas.style.display=showGL?'none':'block';
+  if(st.type==='2d'){ const [w,h]=sizeC2D(); c2d.setTransform(1,0,0,1,0,0); c2d.fillStyle='#06060c'; c2d.fillRect(0,0,w,h); if(st.init) st.init(w,h); }
+  if(st.type==='fbo'){ fbW=0; fbA=null; } // force re-seed (cleared black)
+  start=0;
+}
+const grid=document.getElementById('styleGrid'); let lane='';
+STYLES.forEach(st=>{
+  if(st.lane!==lane){ lane=st.lane; const l=document.createElement('div'); l.className='lane'; l.textContent=lane; grid.appendChild(l);
+    const g=document.createElement('div'); g.className='grid'; g.dataset.lane=lane; grid.appendChild(g); }
+  const g=grid.querySelector(`.grid[data-lane="${lane}"]`);
+  const b=document.createElement('button'); b.className='styleBtn'; b.dataset.id=st.id;
+  b.innerHTML=`${st.cn}<span class="en">${st.en}</span>`; if(st._broken){ b.style.opacity=.4; b.title='编译失败'; }
+  b.onclick=()=>setStyle(st); g.appendChild(b);
+});
+const accentEl=document.getElementById('accent'); accentEl.oninput=()=>setAccent(accentEl.value); setAccent(accentEl.value);
+document.getElementById('speed').oninput=e=>speedMul=parseFloat(e.target.value);
+addEventListener('keydown',e=>{
+  const i=STYLES.indexOf(current);
+  if(e.key==='ArrowRight'||e.key==='ArrowDown') setStyle(STYLES[(i+1)%STYLES.length]);
+  if(e.key==='ArrowLeft'||e.key==='ArrowUp') setStyle(STYLES[(i-1+STYLES.length)%STYLES.length]);
+  if(e.key.toLowerCase()==='h') document.body.classList.toggle('hide-ui');
+});
+addEventListener('resize',()=>{ if(current.type==='2d'){ const[w,h]=sizeC2D(); if(current.init) current.init(w,h); } if(current.type==='fbo'){ fbW=0; fbA=null; } });
+
+setStyle(STYLES[0]);
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
