@@ -100,20 +100,24 @@ async function searchSong(title, artist, duration) {
 async function fetchLyric(songId) {
   const hit = cacheGet(lyricCache, songId);
   if (hit) return hit;
+  // Line-level lrc ALWAYS from the classic endpoint. NetEase's v1 endpoint now
+  // returns a word-timed JSON blob (`{"t":..,"c":[..]}`) in lrc.lyric for most
+  // songs, which parseLRC (it only understands [mm:ss] tags) can't read — so
+  // preferring v1's lrc, as we used to, silently yields no lyrics. v1 is still
+  // queried below purely for the translation (tlyric) and verbatim (yrc) tracks.
+  let lrc = '';
+  let tlyric = '';
+  let yrc = '';
   try {
-    const url = `https://music.163.com/api/song/lyric/v1?id=${songId}&lv=1&tv=1&yv=1`;
-    const j = await fetchJSON(url);
-    const lrc = j?.lrc?.lyric || '';
-    if (lrc || j?.yrc?.lyric) {
-      return cachePut(lyricCache, songId, {
-        lrc,
-        tlyric: j?.tlyric?.lyric || '',
-        yrc:    j?.yrc?.lyric    || '',
-      });
-    }
-  } catch { /* fall through to the classic endpoint */ }
-  const j2 = await fetchJSON(`https://music.163.com/api/song/lyric?id=${songId}&lv=1`);
-  return cachePut(lyricCache, songId, { lrc: j2?.lrc?.lyric || '', tlyric: '', yrc: '' });
+    const j = await fetchJSON(`https://music.163.com/api/song/lyric?id=${songId}&lv=1`);
+    lrc = j?.lrc?.lyric || '';
+  } catch { /* no line lyrics → renderer falls back to title/idle */ }
+  try {
+    const j = await fetchJSON(`https://music.163.com/api/song/lyric/v1?id=${songId}&tv=1&yv=1`);
+    tlyric = j?.tlyric?.lyric || '';
+    yrc = j?.yrc?.lyric || '';
+  } catch { /* translation / verbatim are optional enrichment */ }
+  return cachePut(lyricCache, songId, { lrc, tlyric, yrc });
 }
 
 window.Netease = { searchSong, fetchLyric };
