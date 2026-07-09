@@ -1,5 +1,7 @@
 const { app, BrowserWindow, ipcMain, screen, Menu, Tray, nativeImage } = require('electron');
 const path = require('path');
+const http = require('http');
+const https = require('https');
 
 const TRAY_THEMES = require('./renderer/themes.js');
 const director = require('./director.js');
@@ -8,6 +10,38 @@ let win;
 let tray;
 let clickThrough = false;
 let currentTheme = 'typewriter';
+
+// Best-effort bridge to phone-server (`npm run phone`): push the picked theme so
+// the menu-bar Theme list also drives the phone. Silent no-op when phone-server
+// isn't running — the desktop widget doesn't depend on it. Keep this in sync
+// with phone-server's PHONE_PORT default.
+const PHONE_PORT = Number(process.env.PHONE_PORT) || 10756;
+function postPhoneTheme(name) {
+  const body = JSON.stringify({ theme: name });
+  // phone-server may be http OR https (it flips to https once certs exist), and
+  // main can't easily know which — so fire at both over loopback and let the
+  // wrong-protocol one error out silently. rejectUnauthorized:false accepts the
+  // local self-signed cert; timeout guards against a dead listener.
+  for (const mod of [https, http]) {
+    try {
+      const req = mod.request(
+        {
+          host: '127.0.0.1',
+          port: PHONE_PORT,
+          path: '/control',
+          method: 'POST',
+          headers: { 'content-type': 'application/json', 'content-length': Buffer.byteLength(body) },
+          rejectUnauthorized: false,
+          timeout: 800,
+        },
+        (res) => res.resume(),
+      );
+      req.on('error', () => {});
+      req.on('timeout', () => req.destroy());
+      req.end(body);
+    } catch {}
+  }
+}
 
 function createWindow() {
   const display = screen.getPrimaryDisplay();
@@ -219,6 +253,7 @@ function rebuildTrayMenu() {
       if (win && !win.isDestroyed()) {
         win.webContents.send('apply-theme', t.name);
       }
+      postPhoneTheme(t.name);
       rebuildTrayMenu();
     },
   }));
@@ -278,6 +313,7 @@ app.whenReady().then(() => {
   director.init(app.getPath('userData'));
   createWindow();
   createTray();
+  postPhoneTheme(currentTheme); // seed phone-server with the startup theme
   if (process.platform === 'darwin') app.dock?.hide();
 });
 
