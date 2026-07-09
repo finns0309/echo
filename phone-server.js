@@ -14,6 +14,7 @@
 //   GET /lyric?id=       → NCM lyric, fetched Node-side (headers + no CORS here)
 //   GET /search?title&…  → NCM search fallback (songId usually arrives via /now)
 //   GET /cover?u=        → proxy album art with permissive CORS (clean <canvas>)
+//   WS  /spectrum        → proxy muse's spectrum socket (audio-reactive themes)
 //
 // muse is untouched: it keeps serving /now on 127.0.0.1:10755, loopback-only.
 // Only THIS server faces the LAN, and it only ever reads — so muse → echo stays
@@ -23,6 +24,7 @@ const http = require('http');
 const https = require('https');
 const fs = require('fs');
 const os = require('os');
+const net = require('net');
 const path = require('path');
 const crypto = require('crypto');
 
@@ -327,6 +329,40 @@ if (tls && fs.existsSync(path.join(certDir, 'rootCA.pem'))) {
     })
     .listen(PORT + 1, HOST, () => {});
 }
+
+// Proxy muse's /spectrum WebSocket to the phone (raw byte pipe — both sides
+// speak the same WS protocol, so no frame parsing is needed). This is what lets
+// audio-reactive themes (plasma/furin/…) beat-react on the phone. TLS is
+// terminated here, so the phone uses wss:// while muse stays plain ws:// on
+// loopback. Same cookie auth as everything else; anything else is dropped.
+server.on('upgrade', (req, clientSocket, head) => {
+  const u = new URL(req.url, 'http://localhost');
+  if (u.pathname !== '/spectrum' || !authorized(req, u)) {
+    clientSocket.destroy();
+    return;
+  }
+  const upstream = net.connect(10755, '127.0.0.1', () => {
+    // Re-issue the handshake to muse with the client's key so muse's 101 Accept
+    // matches what the browser computed, then pipe raw bytes both directions.
+    upstream.write(
+      'GET /spectrum HTTP/1.1\r\n' +
+        'Host: 127.0.0.1:10755\r\n' +
+        'Upgrade: websocket\r\n' +
+        'Connection: Upgrade\r\n' +
+        `Sec-WebSocket-Key: ${req.headers['sec-websocket-key']}\r\n` +
+        `Sec-WebSocket-Version: ${req.headers['sec-websocket-version'] || '13'}\r\n\r\n`,
+    );
+    if (head && head.length) upstream.write(head);
+    upstream.pipe(clientSocket);
+    clientSocket.pipe(upstream);
+  });
+  const drop = () => {
+    upstream.destroy();
+    clientSocket.destroy();
+  };
+  upstream.on('error', drop);
+  clientSocket.on('error', drop);
+});
 
 server.listen(PORT, HOST, () => {
   const ips = Object.values(os.networkInterfaces())

@@ -55,7 +55,9 @@
       //  · initial theme: ?theme=<name> wins, else default to `subtitle`
       //    (a single big current line reads best on a tall portrait screen).
       window.__ECHO_MOBILE = true;
-      window.__SPECTRUM_URL = null;
+      // Same-origin spectrum WS — phone-server proxies it to muse — so
+      // audio-reactive themes can beat-react. wss when the page is https.
+      window.__SPECTRUM_URL = (location.protocol === 'https:' ? 'wss' : 'ws') + '://' + location.host + '/spectrum';
       (function () {
         var t = new URLSearchParams(location.search).get('theme');
         // Whether the URL pinned a theme — mobile-shim's /control poller uses
