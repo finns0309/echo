@@ -24,11 +24,41 @@ const https = require('https');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
+const crypto = require('crypto');
 
 const PORT = Number(process.env.PHONE_PORT) || 10756;
 const HOST = process.env.PHONE_HOST || '0.0.0.0'; // LAN-facing on purpose
 const MUSE_NOW = process.env.MUSE_NOW || 'http://127.0.0.1:10755/now';
 const RENDERER_DIR = path.join(__dirname, 'renderer');
+
+// Shared secret so the LAN service stays unlisted: every request must present it
+// (via ?key= once, then a cookie) or get a bland 404 — a port scan just finds
+// "nothing here", not a music server reporting what you're playing. Persisted in
+// .phone-secret (gitignored) so it survives restarts. Loopback is exempt so
+// main.js's /control POST works without knowing the secret.
+function loadSecret() {
+  const file = path.join(__dirname, '.phone-secret');
+  try {
+    const s = fs.readFileSync(file, 'utf8').trim();
+    if (s) return s;
+  } catch {}
+  const s = crypto.randomBytes(16).toString('hex');
+  try {
+    fs.writeFileSync(file, s, { mode: 0o600 });
+  } catch {}
+  return s;
+}
+const SECRET = process.env.PHONE_SECRET || loadSecret();
+const COOKIE = `echo_key=${SECRET}`;
+function isLoopback(req) {
+  const a = req.socket.remoteAddress || '';
+  return a === '127.0.0.1' || a === '::1' || a === '::ffff:127.0.0.1';
+}
+function authorized(req, u) {
+  if (isLoopback(req)) return true;
+  if (u.searchParams.get('key') === SECRET) return true;
+  return (req.headers.cookie || '').split(/;\s*/).includes(COOKIE);
+}
 
 // The same headers netease.js uses. Necessary (and harmless) Node-side, where
 // the browser's forbidden-header list doesn't apply.
@@ -201,6 +231,15 @@ function serveStatic(res, urlPath) {
 
 async function requestListener(req, res) {
   const u = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
+  if (!authorized(req, u)) {
+    res.writeHead(404, { 'content-type': 'text/plain; charset=utf-8' });
+    return void res.end('Not Found');
+  }
+  // First visit carries ?key=… — pin it as a cookie so the PWA, its assets, and
+  // the spectrum WS stay authorized without the token in every URL afterward.
+  if (u.searchParams.get('key') === SECRET) {
+    res.setHeader('set-cookie', `${COOKIE}; Path=/; Max-Age=31536000; SameSite=Lax${tls ? '; Secure' : ''}`);
+  }
   switch (u.pathname) {
     case '/now':
       return void handleNow(res);
@@ -277,7 +316,12 @@ if (tls && fs.existsSync(path.join(certDir, 'rootCA.pem'))) {
   <key>PayloadDescription</key><string>Trusts echo's local certificate so the phone lyrics display can use HTTPS.</string>
 </dict></plist>`;
   http
-    .createServer((_req, res) => {
+    .createServer((req, res) => {
+      const u = new URL(req.url, 'http://localhost');
+      if (!authorized(req, u)) {
+        res.writeHead(404);
+        return void res.end('Not Found');
+      }
       res.writeHead(200, { 'content-type': 'application/x-apple-aspen-config' });
       res.end(mobileconfig);
     })
@@ -292,7 +336,8 @@ server.listen(PORT, HOST, () => {
   const scheme = tls ? 'https' : 'http';
   console.log(`[phone] echo mobile is up (${scheme}):`);
   console.log(`  local : ${scheme}://localhost:${PORT}/`);
-  ips.forEach((ip) => console.log(`  phone : ${scheme}://${ip}:${PORT}/   ← open in Safari`));
-  if (tls) ips.forEach((ip) => console.log(`  cert  : http://${ip}:${PORT + 1}/   ← open this FIRST on the phone, then install + trust`));
+  ips.forEach((ip) => console.log(`  phone : ${scheme}://${ip}:${PORT}/?key=${SECRET}   ← open in Safari`));
+  if (tls) ips.forEach((ip) => console.log(`  cert  : http://${ip}:${PORT + 1}/?key=${SECRET}   ← open this FIRST, then install + trust`));
+  console.log(`[phone] access key: ${SECRET}  — unauthorized requests get a bland 404`);
   console.log(`[phone] now-playing proxied from ${MUSE_NOW} — muse stays loopback-only`);
 });

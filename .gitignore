@@ -1,6 +1,7 @@
 node_modules/
 secrets.json
 certs/
+.phone-secret
 .DS_Store
 *.log
 .vscode/
