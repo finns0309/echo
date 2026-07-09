@@ -86,7 +86,10 @@ function processOnset() {
 function connectSpectrum() {
   spectrumReconnectTimer = null;
   try {
-    spectrumWS = new WebSocket('ws://127.0.0.1:10755/spectrum');
+    // window.__SPECTRUM_URL lets the phone build (phone.html) redirect or, by
+    // setting it to null, opt out entirely — see the guard on the initial
+    // connect below. Undefined on desktop → the default loopback socket.
+    spectrumWS = new WebSocket(window.__SPECTRUM_URL || 'ws://127.0.0.1:10755/spectrum');
   } catch { scheduleReconnect(); return; }
   spectrumWS.addEventListener('open', () => console.log('[spectrum] connected to muse'));
   spectrumWS.addEventListener('message', (ev) => {
@@ -115,8 +118,10 @@ window.__piano = {
 };
 
 // Keep the pipe warm so the cached frame + diagnostics are live and a future
-// consumer gets data the instant it registers.
-connectSpectrum();
+// consumer gets data the instant it registers. The phone build sets
+// __SPECTRUM_URL = null (no muse socket to reach from a phone) — skip entirely
+// so we don't spin a 3s reconnect loop against the device's own localhost.
+if (window.__SPECTRUM_URL !== null) connectSpectrum();
 
 window.FL_AUDIO = {
   // Runs every tick. processOnset early-returns unless muse pushed a fresh

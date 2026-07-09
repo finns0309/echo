@@ -1,0 +1,128 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <!-- viewport-fit=cover so the album background bleeds under the notch/home
+         indicator; maximum-scale locks out the pinch-zoom that would break a
+         full-bleed ornament. -->
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover"
+    />
+    <!-- Add-to-Home-Screen: run standalone (no Safari chrome), dark status bar. -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="echo" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="theme-color" content="#000000" />
+
+    <link rel="stylesheet" href="style.css" />
+    <style>
+      /* Mobile overrides. Kept here (not in style.css) so the desktop build is
+         untouched — this file is the only thing that ever loads them. */
+      html,
+      body {
+        height: 100%;
+        margin: 0;
+        background: #000; /* fills before the first cover loads / letterbox */
+        overflow: hidden;
+        overscroll-behavior: none; /* no rubber-band scroll */
+        -webkit-user-select: none;
+        user-select: none;
+        -webkit-touch-callout: none;
+        -webkit-tap-highlight-color: transparent;
+      }
+      /* The topbar is a desktop affordance (drag handle + window buttons);
+         there is no window to pin/maximize/close on a phone. */
+      #topbar {
+        display: none !important;
+      }
+      /* Respect the safe area so centered lyrics never hide under the notch or
+         the home indicator. Individual themes already center within #stage /
+         #lyrics, so padding the body is enough. */
+      body {
+        padding: env(safe-area-inset-top) env(safe-area-inset-right)
+          env(safe-area-inset-bottom) env(safe-area-inset-left);
+        box-sizing: border-box;
+      }
+    </style>
+
+    <script>
+      // Pre-boot flags — must run before the module scripts below.
+      //  · __ECHO_MOBILE  lets any module branch for the phone if it wants to.
+      //  · __SPECTRUM_URL=null tells audio.js NOT to open the spectrum WS
+      //    (it would target the phone's own localhost and retry forever).
+      //  · initial theme: ?theme=<name> wins, else default to `subtitle`
+      //    (a single big current line reads best on a tall portrait screen).
+      window.__ECHO_MOBILE = true;
+      window.__SPECTRUM_URL = null;
+      (function () {
+        var t = new URLSearchParams(location.search).get('theme');
+        // Whether the URL pinned a theme — mobile-shim's /control poller uses
+        // this to decide if a menu-bar pick may override the booted theme.
+        window.__ECHO_HAD_THEME_PARAM = !!t;
+        if (t) localStorage.setItem('theme', t);
+        else if (!localStorage.getItem('theme')) localStorage.setItem('theme', 'subtitle');
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="bg"></div>
+    <canvas id="fx"></canvas>
+    <div id="tint"></div>
+
+    <div id="topbar">
+      <div id="meta">
+        <span id="title">—</span>
+        <span id="artist"></span>
+      </div>
+      <div id="buttons">
+        <button id="pin" title="鼠标穿透">◌</button>
+        <button id="maximize" title="铺满屏幕 / 还原">⤢</button>
+        <button id="close" title="退出">×</button>
+      </div>
+    </div>
+
+    <div id="lyrics">
+      <div class="line prev" id="prev"></div>
+      <div class="line curr" id="curr">等待播放…</div>
+      <div class="line next" id="next"></div>
+    </div>
+
+    <div id="stage"></div>
+    <div id="danmaku"></div>
+    <div id="convo"></div>
+    <div id="furin"></div>
+    <div id="ticket"></div>
+    <div id="roam"></div>
+    <div id="eva"></div>
+    <div id="shinkai"></div>
+    <div id="idol"></div>
+    <div id="karaoke"></div>
+
+    <div id="toast"></div>
+
+    <!-- Same renderer modules as index.html, same order. -->
+    <script src="themes.js"></script>
+    <script src="fx.js"></script>
+    <script src="lrc.js"></script>
+    <script src="netease.js"></script>
+    <script src="danmaku.js"></script>
+    <script src="conversation.js"></script>
+    <script src="audio.js"></script>
+    <script src="textpick.js"></script>
+    <script src="furin.js"></script>
+    <script src="ticket.js"></script>
+    <script src="roam.js"></script>
+    <script src="eva.js"></script>
+    <script src="shinkai.js"></script>
+    <script src="idol.js"></script>
+    <script src="karaoke.js"></script>
+    <!-- Phone bridge: defines window.api + reroutes Netease. Must sit AFTER the
+         modules (wraps window.Netease) and BEFORE app.js (which needs window.api). -->
+    <script src="mobile-shim.js"></script>
+    <!-- Keep the screen awake on a charger (phone-only; independent of app.js). -->
+    <script src="wakelock.js"></script>
+    <script src="app.js"></script>
+  </body>
+</html>
